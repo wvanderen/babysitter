@@ -15,7 +15,6 @@ defmodule Babysitter.MixProject do
   defp elixirc_paths(:test), do: ["lib", "test/support"]
   defp elixirc_paths(_), do: ["lib"]
 
-  # Run "mix help compile.app" to learn about applications.
   def application do
     [
       extra_applications: [:logger],
@@ -23,13 +22,13 @@ defmodule Babysitter.MixProject do
     ]
   end
 
-  # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
       {:phoenix, "~> 1.7"},
       {:phoenix_live_dashboard, "~> 0.8"},
       {:jason, "~> 1.4"},
-      {:plug_cowboy, "~> 2.7"}
+      {:plug_cowboy, "~> 2.7"},
+      {:ecto_sqlite3, "~> 0.17"}
     ]
   end
 end

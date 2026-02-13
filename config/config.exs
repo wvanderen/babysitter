@@ -6,6 +6,10 @@ config :babysitter, BabysitterWeb.Endpoint,
   pubsub_server: Babysitter.PubSub,
   live_view: [signing_salt: "babysitter_live_secret"]
 
+config :babysitter, Babysitter.TD.Repo,
+  database: ".todos/issues.db",
+  pool_size: 5
+
 config :logger, :console,
   format: "$time $metadata[$level] $message\n",
   metadata: [:request_id]

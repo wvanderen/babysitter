@@ -5,4 +5,8 @@ config :babysitter, BabysitterWeb.Endpoint,
   secret_key_base: "test_secret_key_base_for_babysitter_application_do_not_use_in_prod",
   server: false
 
+config :babysitter, Babysitter.TD.Repo,
+  database: ".todos/test_issues.db",
+  pool_size: 5
+
 config :logger, level: :warning
