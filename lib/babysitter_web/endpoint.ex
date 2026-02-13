@@ -3,6 +3,8 @@ defmodule BabysitterWeb.Endpoint do
 
   @static_paths ~w(assets fonts images favicon.ico robots.txt)
 
+  socket("/socket", BabysitterWeb.UserSocket, websocket: [timeout: 45_000])
+
   plug(Plug.Static,
     at: "/",
     from: :babysitter,
