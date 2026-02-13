@@ -1,4 +1,10 @@
 .sidecar
-.td
 .todos
 .env*
+
+/_build
+/cover
+/deps
+erl_crash.dump
+*.ez
+*.beam
