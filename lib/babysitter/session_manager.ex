@@ -39,6 +39,10 @@ defmodule Babysitter.SessionManager do
     GenServer.call(__MODULE__, {:destroy_session, session_id})
   end
 
+  def clear do
+    GenServer.call(__MODULE__, :clear)
+  end
+
   @impl true
   def init(_opts) do
     state = %{
@@ -83,5 +87,9 @@ defmodule Babysitter.SessionManager do
         state = put_in(state, [:sessions, session_id], session)
         {:reply, {:ok, session}, state}
     end
+  end
+
+  def handle_call(:clear, _from, _state) do
+    {:reply, :ok, %{sessions: %{}}}
   end
 end

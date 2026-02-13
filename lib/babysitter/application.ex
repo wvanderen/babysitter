@@ -15,6 +15,7 @@ defmodule Babysitter.Application do
   def start(_type, _args) do
     children = [
       BabysitterWeb.Telemetry,
+      Babysitter.WorkflowStore,
       Babysitter.SessionManager,
       {DynamicSupervisor, strategy: :one_for_one, name: Babysitter.WorkflowSupervisor},
       BabysitterWeb.Endpoint
