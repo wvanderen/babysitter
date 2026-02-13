@@ -80,7 +80,7 @@ defmodule Babysitter.SessionManagerTest do
       id = unique_id("test-pause")
       {:ok, _} = SessionManager.create_session(id)
       {:ok, :paused} = SessionManager.pause_session(id)
-      assert {:error, :already_paused} = SessionManager.pause_session(id)
+      assert {:error, {:invalid_transition, :paused, :paused}} = SessionManager.pause_session(id)
     end
   end
 
@@ -101,7 +101,9 @@ defmodule Babysitter.SessionManagerTest do
     test "returns error if not paused" do
       id = unique_id("test-resume")
       {:ok, _} = SessionManager.create_session(id)
-      assert {:error, :not_paused} = SessionManager.resume_session(id)
+
+      assert {:error, {:invalid_transition, :running, :running}} =
+               SessionManager.resume_session(id)
     end
   end
 

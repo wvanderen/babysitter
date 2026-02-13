@@ -51,7 +51,7 @@ defmodule Babysitter.SessionTest do
       {:ok, _pid} = start_session(id)
       {:ok, :paused} = Session.pause(id)
 
-      assert {:error, :already_paused} = Session.pause(id)
+      assert {:error, {:invalid_transition, :paused, :paused}} = Session.pause(id)
 
       stop_session(id)
     end
@@ -59,7 +59,7 @@ defmodule Babysitter.SessionTest do
     test "returns error when resuming running session", %{session_id: id} do
       {:ok, _pid} = start_session(id)
 
-      assert {:error, :not_paused} = Session.resume(id)
+      assert {:error, {:invalid_transition, :running, :running}} = Session.resume(id)
 
       stop_session(id)
     end
@@ -126,6 +126,106 @@ defmodule Babysitter.SessionTest do
       assert state.tmux_name == nil
 
       refute Babysitter.Tmux.session_exists?(tmux_name)
+    end
+  end
+
+  describe "state machine transitions" do
+    test "valid_transitions? returns correct allowed transitions" do
+      assert Session.valid_transition?(:running, :paused)
+      assert Session.valid_transition?(:running, :completed)
+      assert Session.valid_transition?(:running, :failed)
+      assert Session.valid_transition?(:running, :escalated)
+      refute Session.valid_transition?(:running, :running)
+    end
+
+    test "valid_transitions returns list of allowed transitions" do
+      transitions = Session.valid_transitions(:running)
+      assert :paused in transitions
+      assert :completed in transitions
+      assert :failed in transitions
+      assert :escalated in transitions
+    end
+
+    test "complete transitions running to completed", %{session_id: id} do
+      {:ok, _pid} = start_session(id)
+
+      assert {:ok, :completed} = Session.complete(id)
+      {:ok, status} = Session.get_status(id)
+      assert status == :completed
+
+      stop_session(id)
+    end
+
+    test "fail transitions running to failed with reason", %{session_id: id} do
+      {:ok, _pid} = start_session(id)
+
+      assert {:ok, :failed} = Session.fail(id, "build error")
+      {:ok, state} = Session.get_state(id)
+      assert state.status == :failed
+      assert state.failure_reason == "build error"
+
+      stop_session(id)
+    end
+
+    test "escalate transitions running to escalated with reason", %{session_id: id} do
+      {:ok, _pid} = start_session(id)
+
+      assert {:ok, :escalated} = Session.escalate(id, "needs approval")
+      {:ok, state} = Session.get_state(id)
+      assert state.status == :escalated
+      assert state.escalation_reason == "needs approval"
+
+      stop_session(id)
+    end
+
+    test "escalate transitions paused to escalated", %{session_id: id} do
+      {:ok, _pid} = start_session(id)
+      {:ok, :paused} = Session.pause(id)
+
+      assert {:ok, :escalated} = Session.escalate(id, "stuck")
+      {:ok, status} = Session.get_status(id)
+      assert status == :escalated
+
+      stop_session(id)
+    end
+
+    test "cannot complete from paused state", %{session_id: id} do
+      {:ok, _pid} = start_session(id)
+      {:ok, :paused} = Session.pause(id)
+
+      assert {:error, {:invalid_transition, :paused, :completed}} = Session.complete(id)
+
+      stop_session(id)
+    end
+
+    test "cannot fail from paused state", %{session_id: id} do
+      {:ok, _pid} = start_session(id)
+      {:ok, :paused} = Session.pause(id)
+
+      assert {:error, {:invalid_transition, :paused, :failed}} = Session.fail(id, "test")
+
+      stop_session(id)
+    end
+
+    test "valid_transitions_for returns transitions for current state", %{session_id: id} do
+      {:ok, _pid} = start_session(id)
+
+      assert {:ok, transitions} = Session.valid_transitions_for(id)
+      assert :paused in transitions
+      assert :completed in transitions
+
+      stop_session(id)
+    end
+
+    test "escalated can transition back to running", %{session_id: id} do
+      {:ok, _pid} = start_session(id)
+      {:ok, :escalated} = Session.escalate(id, "check")
+
+      assert {:ok, :running} = Session.resume(id)
+      {:ok, status} = Session.get_status(id)
+      assert status == :running
+
+      stop_session(id)
     end
   end
 

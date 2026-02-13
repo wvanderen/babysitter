@@ -6,14 +6,35 @@ defmodule Babysitter.Session do
   - Session state and metadata
   - Tmux session reference
   - Output buffer for capturing agent output
+
+  State machine transitions:
+  - :initializing → :running (on successful tmux creation)
+  - :running → :paused (pause)
+  - :paused → :running (resume)
+  - :running → :completed (complete)
+  - :running → :failed (fail)
+  - :running → :escalated (escalate)
+  - :paused → :escalated (escalate while paused)
+  - :any → :stopped (stop)
   """
 
   use GenServer
 
-  @type status :: :initializing | :running | :paused | :stopping | :stopped
+  @type status ::
+          :initializing | :running | :paused | :completed | :failed | :escalated | :stopped
   @type session_id :: String.t()
+  @type transition_error :: {:error, {:invalid_transition, status(), status()}}
 
-  @derive {Jason.Encoder, only: [:id, :status, :tmux_name, :started_at, :metadata]}
+  @derive {Jason.Encoder,
+           only: [
+             :id,
+             :status,
+             :tmux_name,
+             :started_at,
+             :metadata,
+             :failure_reason,
+             :escalation_reason
+           ]}
   @type t :: %__MODULE__{
           id: session_id(),
           status: status(),
@@ -34,8 +55,29 @@ defmodule Babysitter.Session do
     output_buffer: "",
     buffer_size: 0,
     max_buffer_size: 100_000,
-    metadata: %{}
+    metadata: %{},
+    failure_reason: nil,
+    escalation_reason: nil
   ]
+
+  @valid_transitions %{
+    initializing: [:running, :stopped, :failed],
+    running: [:paused, :completed, :failed, :escalated, :stopped],
+    paused: [:running, :escalated, :stopped],
+    completed: [:stopped],
+    failed: [:stopped],
+    escalated: [:running, :stopped]
+  }
+
+  @spec valid_transition?(status(), status()) :: boolean()
+  def valid_transition?(from_status, to_status) do
+    to_status in Map.get(@valid_transitions, from_status, [])
+  end
+
+  @spec valid_transitions(status()) :: [status()]
+  def valid_transitions(status) do
+    Map.get(@valid_transitions, status, [])
+  end
 
   def start_link(opts) do
     id = Keyword.fetch!(opts, :id)
@@ -90,6 +132,22 @@ defmodule Babysitter.Session do
     GenServer.call(via_tuple(id), :clear_buffer)
   end
 
+  def complete(id) do
+    GenServer.call(via_tuple(id), :complete)
+  end
+
+  def fail(id, reason \\ nil) do
+    GenServer.call(via_tuple(id), {:fail, reason})
+  end
+
+  def escalate(id, reason \\ nil) do
+    GenServer.call(via_tuple(id), {:escalate, reason})
+  end
+
+  def valid_transitions_for(id) do
+    GenServer.call(via_tuple(id), :valid_transitions)
+  end
+
   @impl true
   def init(opts) do
     id = Keyword.fetch!(opts, :id)
@@ -129,31 +187,49 @@ defmodule Babysitter.Session do
   end
 
   def handle_call(:pause, _from, state) do
-    case state.status do
-      :paused ->
-        {:reply, {:error, :already_paused}, state}
-
-      :running ->
-        Babysitter.Tmux.send_keys(state.tmux_name, "\x1A")
-        {:reply, {:ok, :paused}, %{state | status: :paused}}
-
-      _ ->
-        {:reply, {:error, :invalid_status}, state}
+    with :ok <- validate_transition(state.status, :paused) do
+      Babysitter.Tmux.send_keys(state.tmux_name, "\x1A")
+      {:reply, {:ok, :paused}, %{state | status: :paused}}
+    else
+      {:error, _} = error -> {:reply, error, state}
     end
   end
 
   def handle_call(:resume, _from, state) do
-    case state.status do
-      :running ->
-        {:reply, {:error, :not_paused}, state}
-
-      :paused ->
-        Babysitter.Tmux.send_keys(state.tmux_name, "\x1A")
-        {:reply, {:ok, :running}, %{state | status: :running}}
-
-      _ ->
-        {:reply, {:error, :invalid_status}, state}
+    with :ok <- validate_transition(state.status, :running) do
+      Babysitter.Tmux.send_keys(state.tmux_name, "\x1A")
+      {:reply, {:ok, :running}, %{state | status: :running}}
+    else
+      {:error, _} = error -> {:reply, error, state}
     end
+  end
+
+  def handle_call(:complete, _from, state) do
+    with :ok <- validate_transition(state.status, :completed) do
+      {:reply, {:ok, :completed}, %{state | status: :completed}}
+    else
+      {:error, _} = error -> {:reply, error, state}
+    end
+  end
+
+  def handle_call({:fail, reason}, _from, state) do
+    with :ok <- validate_transition(state.status, :failed) do
+      {:reply, {:ok, :failed}, %{state | status: :failed, failure_reason: reason}}
+    else
+      {:error, _} = error -> {:reply, error, state}
+    end
+  end
+
+  def handle_call({:escalate, reason}, _from, state) do
+    with :ok <- validate_transition(state.status, :escalated) do
+      {:reply, {:ok, :escalated}, %{state | status: :escalated, escalation_reason: reason}}
+    else
+      {:error, _} = error -> {:reply, error, state}
+    end
+  end
+
+  def handle_call(:valid_transitions, _from, state) do
+    {:reply, {:ok, valid_transitions(state.status)}, state}
   end
 
   def handle_call(:stop, _from, state) do
@@ -202,6 +278,14 @@ defmodule Babysitter.Session do
       binary_part(combined, drop_bytes, max_size)
     else
       combined
+    end
+  end
+
+  defp validate_transition(from_status, to_status) do
+    if valid_transition?(from_status, to_status) do
+      :ok
+    else
+      {:error, {:invalid_transition, from_status, to_status}}
     end
   end
 end
