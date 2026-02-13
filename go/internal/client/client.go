@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -206,7 +207,16 @@ type WSMessage struct {
 	SessionID string                 `json:"session_id,omitempty"`
 	Session   *Session               `json:"session,omitempty"`
 	Stage     string                 `json:"stage,omitempty"`
+	Output    string                 `json:"output,omitempty"`
+	Status    string                 `json:"status,omitempty"`
 	Data      map[string]interface{} `json:"data,omitempty"`
+}
+
+type WSClient struct {
+	conn      *websocket.Conn
+	client    *Client
+	onMessage func(WSMessage)
+	done      chan struct{}
 }
 
 func (c *Client) ConnectWebSocket(onMessage func(WSMessage)) error {
@@ -216,20 +226,94 @@ func (c *Client) ConnectWebSocket(onMessage func(WSMessage)) error {
 	if err != nil {
 		return fmt.Errorf("failed to connect websocket: %w", err)
 	}
+
+	wsClient := &WSClient{
+		conn:      conn,
+		client:    c,
+		onMessage: onMessage,
+		done:      make(chan struct{}),
+	}
 	c.wsConn = conn
 
-	go func() {
-		defer conn.Close()
-		for {
-			var msg WSMessage
-			if err := conn.ReadJSON(&msg); err != nil {
-				return
-			}
-			onMessage(msg)
-		}
-	}()
+	go wsClient.readLoop()
 
 	return nil
+}
+
+func (c *Client) WebSocket() (*WSClient, error) {
+	wsURL := "ws" + c.baseURL[4:] + "/ws"
+
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect websocket: %w", err)
+	}
+	c.wsConn = conn
+
+	return &WSClient{
+		conn:   conn,
+		client: c,
+		done:   make(chan struct{}),
+	}, nil
+}
+
+func (ws *WSClient) readLoop() {
+	defer ws.conn.Close()
+	for {
+		select {
+		case <-ws.done:
+			return
+		default:
+			var msg WSMessage
+			if err := ws.conn.ReadJSON(&msg); err != nil {
+				return
+			}
+			if ws.onMessage != nil {
+				ws.onMessage(msg)
+			}
+		}
+	}
+}
+
+func (ws *WSClient) OnMessage(handler func(WSMessage)) {
+	ws.onMessage = handler
+}
+
+func (ws *WSClient) JoinSession(sessionID string) error {
+	joinMsg := map[string]interface{}{
+		"topic":   "session:" + sessionID,
+		"event":   "phx_join",
+		"payload": map[string]interface{}{},
+		"ref":     "1",
+	}
+	return ws.conn.WriteJSON(joinMsg)
+}
+
+func (ws *WSClient) LeaveSession(sessionID string) error {
+	leaveMsg := map[string]interface{}{
+		"topic":   "session:" + sessionID,
+		"event":   "phx_leave",
+		"payload": map[string]interface{}{},
+		"ref":     "2",
+	}
+	return ws.conn.WriteJSON(leaveMsg)
+}
+
+func (ws *WSClient) Ping() (int64, error) {
+	pingMsg := map[string]interface{}{
+		"topic":   "phoenix",
+		"event":   "ping",
+		"payload": map[string]interface{}{},
+		"ref":     "3",
+	}
+	if err := ws.conn.WriteJSON(pingMsg); err != nil {
+		return 0, err
+	}
+	return time.Now().UnixMilli(), nil
+}
+
+func (ws *WSClient) Close() {
+	close(ws.done)
+	ws.conn.Close()
 }
 
 func (c *Client) Close() {

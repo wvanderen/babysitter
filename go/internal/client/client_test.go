@@ -223,3 +223,45 @@ func TestExecuteWorkflow(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestAPIError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "internal error"})
+	}))
+	defer server.Close()
+
+	c := New(server.URL)
+	_, err := c.ListSessions()
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	apiErr, ok := err.(*APIError)
+	if !ok {
+		t.Fatalf("expected APIError, got %T", err)
+	}
+	if apiErr.StatusCode != http.StatusInternalServerError {
+		t.Errorf("expected 500, got %d", apiErr.StatusCode)
+	}
+	if apiErr.Error() == "" {
+		t.Error("expected error message")
+	}
+}
+
+func TestWSMessageFields(t *testing.T) {
+	msg := WSMessage{
+		Event:     "session:output",
+		SessionID: "session-1",
+		Stage:     "stage-1",
+		Output:    "Hello world",
+		Status:    "running",
+		Data:      map[string]interface{}{"key": "value"},
+	}
+
+	if msg.Event != "session:output" {
+		t.Errorf("expected session:output, got %s", msg.Event)
+	}
+	if msg.Output != "Hello world" {
+		t.Errorf("expected Hello world, got %s", msg.Output)
+	}
+}
