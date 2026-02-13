@@ -20,6 +20,7 @@ defmodule Babysitter.Stage do
           transitions: [Babysitter.Transition.t()],
           on_success: stage_id() | nil,
           on_failure: stage_id() | nil,
+          on_timeout: stage_id() | nil,
           metadata: map()
         }
 
@@ -35,6 +36,7 @@ defmodule Babysitter.Stage do
     transitions: [],
     on_success: nil,
     on_failure: nil,
+    on_timeout: nil,
     metadata: %{}
   ]
 
@@ -50,8 +52,10 @@ defmodule Babysitter.Stage do
       name: Keyword.get(opts, :name),
       timeout: Keyword.get(opts, :timeout, :infinity),
       validations: Keyword.get(opts, :validations, []),
+      transitions: Keyword.get(opts, :transitions, []),
       on_success: Keyword.get(opts, :on_success),
-      on_failure: Keyword.get(opts, :on_failure)
+      on_failure: Keyword.get(opts, :on_failure),
+      on_timeout: Keyword.get(opts, :on_timeout)
     }
   end
 
@@ -67,8 +71,10 @@ defmodule Babysitter.Stage do
       name: Keyword.get(opts, :name),
       timeout: Keyword.get(opts, :timeout, :infinity),
       validations: Keyword.get(opts, :validations, []),
+      transitions: Keyword.get(opts, :transitions, []),
       on_success: Keyword.get(opts, :on_success),
-      on_failure: Keyword.get(opts, :on_failure)
+      on_failure: Keyword.get(opts, :on_failure),
+      on_timeout: Keyword.get(opts, :on_timeout)
     }
   end
 
@@ -83,7 +89,8 @@ defmodule Babysitter.Stage do
       validations: validations,
       name: Keyword.get(opts, :name),
       on_success: Keyword.get(opts, :on_success),
-      on_failure: Keyword.get(opts, :on_failure)
+      on_failure: Keyword.get(opts, :on_failure),
+      on_timeout: Keyword.get(opts, :on_timeout)
     }
   end
 
