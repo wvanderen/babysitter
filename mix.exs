@@ -28,7 +28,8 @@ defmodule Babysitter.MixProject do
       {:phoenix_live_dashboard, "~> 0.8"},
       {:jason, "~> 1.4"},
       {:plug_cowboy, "~> 2.7"},
-      {:ecto_sqlite3, "~> 0.17"}
+      {:ecto_sqlite3, "~> 0.17"},
+      {:yamerl, "~> 0.10"}
     ]
   end
 end
