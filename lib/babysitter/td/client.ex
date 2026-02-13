@@ -5,7 +5,7 @@ defmodule Babysitter.TD.Client do
   Provides read-only access to the .todos/issues.db file.
   """
 
-  alias Babysitter.TD.{Issue, Repo}
+  alias Babysitter.TD.{Handoff, Issue, Repo}
   import Ecto.Query
 
   @doc """
@@ -124,5 +124,38 @@ defmodule Babysitter.TD.Client do
   def count_by_status(status) do
     from(i in Issue, where: i.status == ^status)
     |> Repo.aggregate(:count, :id)
+  end
+
+  @doc """
+  Get the latest handoff for an issue.
+  """
+  @spec get_latest_handoff(String.t()) :: Handoff.t() | nil
+  def get_latest_handoff(issue_id) do
+    from(h in Handoff,
+      where: h.issue_id == ^issue_id,
+      order_by: [desc: h.timestamp],
+      limit: 1
+    )
+    |> Repo.one()
+  end
+
+  @doc """
+  Get all handoffs for an issue.
+  """
+  @spec get_handoffs(String.t()) :: [Handoff.t()]
+  def get_handoffs(issue_id) do
+    from(h in Handoff,
+      where: h.issue_id == ^issue_id,
+      order_by: [desc: h.timestamp]
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Get handoff by ID.
+  """
+  @spec get_handoff(String.t()) :: Handoff.t() | nil
+  def get_handoff(id) do
+    Repo.get(Handoff, id)
   end
 end
