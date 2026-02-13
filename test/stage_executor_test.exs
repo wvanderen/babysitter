@@ -32,11 +32,32 @@ defmodule Babysitter.StageExecutorTest do
                StageExecutor.execute(stage, "nonexistent-#{:rand.uniform(1_000_000)}")
     end
 
-    test "returns error for wrong stage type", %{session_id: session_id} do
-      stage = Stage.action(:build, "mix compile")
+    test "executes action stage in tmux session", %{session_id: session_id} do
+      stage = Stage.action(:build, "echo 'Building'")
 
-      assert {:error, {:invalid_stage_type, _}} =
-               StageExecutor.execute(stage, session_id)
+      assert {:ok, result} = StageExecutor.execute(stage, session_id)
+      assert result.stage_id == :build
+      assert result.session_id == session_id
+      assert result.status == :success
+      assert result.output =~ "Building"
+      assert result.exit_code == 0
+    end
+
+    test "action stage captures non-zero exit code", %{session_id: session_id} do
+      stage = Stage.action(:fail_test, "exit 42")
+
+      assert {:ok, result} = StageExecutor.execute(stage, session_id)
+      assert result.status == :failure
+      assert result.exit_code == 42
+    end
+
+    test "action stage with environment variables", %{session_id: session_id} do
+      stage = Stage.action(:env_test, "echo $MY_VAR")
+      opts = [env: [MY_VAR: "hello_from_env"], max_wait: 5_000]
+
+      assert {:ok, result} = StageExecutor.execute(stage, session_id, opts)
+      assert result.status == :success
+      assert result.output =~ "hello_from_env"
     end
 
     test "returns error for stage without prompt", %{session_id: session_id} do
@@ -50,6 +71,20 @@ defmodule Babysitter.StageExecutorTest do
       stage = %Stage{id: :empty, type: :agent, prompt: ""}
 
       assert {:error, :empty_prompt} =
+               StageExecutor.execute(stage, session_id)
+    end
+
+    test "returns error for action without command", %{session_id: session_id} do
+      stage = %Stage{id: :no_cmd, type: :action, command: nil}
+
+      assert {:error, :no_command_defined} =
+               StageExecutor.execute(stage, session_id)
+    end
+
+    test "returns error for action with empty command", %{session_id: session_id} do
+      stage = %Stage{id: :empty_cmd, type: :action, command: ""}
+
+      assert {:error, :empty_command} =
                StageExecutor.execute(stage, session_id)
     end
   end

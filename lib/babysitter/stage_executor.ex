@@ -74,7 +74,111 @@ defmodule Babysitter.StageExecutor do
     * `{:error, reason}` - Execution failed to start
   """
   @spec execute(Stage.t(), String.t(), keyword()) :: {:ok, Result.t()} | {:error, term()}
-  def execute(%Stage{} = stage, session_id, opts \\ []) do
+  def execute(stage, session_id, opts \\ [])
+
+  def execute(%Stage{type: :action} = stage, session_id, opts) do
+    execute_action(stage, session_id, opts)
+  end
+
+  def execute(%Stage{} = stage, session_id, opts) do
+    execute_agent(stage, session_id, opts)
+  end
+
+  @doc """
+  Execute an action stage (shell command) within a session.
+
+  Action stages run shell commands and capture their exit codes.
+  The command is executed in the session's tmux pane.
+
+  ## Options
+    * `:poll_interval` - Milliseconds between output polls (default: 500)
+    * `:max_wait` - Maximum milliseconds to wait for completion (default: 300_000)
+    * `:env` - Environment variables as keyword list or map
+
+  ## Returns
+    * `{:ok, Result.t()}` - Execution completed with exit code
+    * `{:error, reason}` - Execution failed to start
+  """
+  @spec execute_action(Stage.t(), String.t(), keyword()) :: {:ok, Result.t()} | {:error, term()}
+  def execute_action(stage, session_id, opts \\ [])
+
+  def execute_action(%Stage{type: :action} = stage, session_id, opts) do
+    started_at = DateTime.utc_now()
+    poll_interval = Keyword.get(opts, :poll_interval, @default_poll_interval)
+    max_wait = Keyword.get(opts, :max_wait, @default_max_wait)
+    env = Keyword.get(opts, :env, [])
+
+    with {:ok, session} <- get_session(session_id),
+         {:ok, command} <- build_action_command(stage, env) do
+      :ok = Tmux.send_keys(session.tmux_name, command)
+
+      case wait_for_command_completion(
+             session.tmux_name,
+             started_at,
+             poll_interval,
+             max_wait
+           ) do
+        {:ok, {output, exit_code}} ->
+          finished_at = DateTime.utc_now()
+          Session.append_output(session_id, output)
+
+          status = if exit_code == 0, do: :success, else: :failure
+
+          result = %Result{
+            stage_id: stage.id,
+            session_id: session_id,
+            started_at: started_at,
+            finished_at: finished_at,
+            status: status,
+            output: output,
+            exit_code: exit_code
+          }
+
+          {:ok, result}
+
+        {:timeout, output} ->
+          finished_at = DateTime.utc_now()
+          Session.append_output(session_id, output)
+
+          {:ok,
+           %Result{
+             stage_id: stage.id,
+             session_id: session_id,
+             started_at: started_at,
+             finished_at: finished_at,
+             status: :timeout,
+             output: output,
+             exit_code: nil,
+             error: "Action timed out after #{max_wait}ms"
+           }}
+
+        {:error, reason} ->
+          finished_at = DateTime.utc_now()
+
+          {:ok,
+           %Result{
+             stage_id: stage.id,
+             session_id: session_id,
+             started_at: started_at,
+             finished_at: finished_at,
+             status: :failure,
+             error: inspect(reason)
+           }}
+      end
+    end
+  end
+
+  def execute_action(%Stage{type: type}, _session_id, _opts) do
+    {:error, {:invalid_stage_type, expected: :action, got: type}}
+  end
+
+  @doc """
+  Execute an agent stage within a session.
+
+  Agent stages send prompts to an AI agent running in the tmux session.
+  """
+  @spec execute_agent(Stage.t(), String.t(), keyword()) :: {:ok, Result.t()} | {:error, term()}
+  def execute_agent(%Stage{} = stage, session_id, opts \\ []) do
     started_at = DateTime.utc_now()
 
     with {:ok, session} <- get_session(session_id),
@@ -234,6 +338,100 @@ defmodule Babysitter.StageExecutor do
 
   defp build_command(%Stage{prompt: ""}) do
     {:error, :empty_prompt}
+  end
+
+  defp build_action_command(%Stage{command: command}, env)
+       when is_binary(command) and command != "" do
+    env_prefix = build_env_prefix(env)
+    wrapped_command = "#{env_prefix}(#{command}); RET=$?; echo \"BABYSITTER_EXIT_${RET}_CODE\""
+    {:ok, wrapped_command}
+  end
+
+  defp build_action_command(%Stage{command: nil}, _env) do
+    {:error, :no_command_defined}
+  end
+
+  defp build_action_command(%Stage{command: ""}, _env) do
+    {:error, :empty_command}
+  end
+
+  defp build_env_prefix([]), do: ""
+
+  defp build_env_prefix(env) when is_list(env) do
+    exports =
+      env
+      |> Enum.map(fn {key, value} -> "export #{key}=#{escape_shell_value(value)}" end)
+      |> Enum.join("; ")
+
+    "#{exports}; "
+  end
+
+  defp build_env_prefix(env) when is_map(env) do
+    exports =
+      env
+      |> Enum.map(fn {key, value} -> "export #{key}=#{escape_shell_value(value)}" end)
+      |> Enum.join("; ")
+
+    "#{exports}; "
+  end
+
+  defp escape_shell_value(value) when is_binary(value) do
+    if String.contains?(value, [" ", "'", "\"", "$", "\\"]) do
+      "'#{String.replace(value, "'", "'\\''")}'"
+    else
+      value
+    end
+  end
+
+  defp escape_shell_value(value), do: to_string(value)
+
+  defp wait_for_command_completion(tmux_name, started_at, poll_interval, max_wait) do
+    deadline = DateTime.add(started_at, max_wait, :millisecond)
+    do_wait_for_command(tmux_name, deadline, poll_interval, nil)
+  end
+
+  defp do_wait_for_command(tmux_name, deadline, poll_interval, _last_output) do
+    if DateTime.compare(DateTime.utc_now(), deadline) == :gt do
+      case Tmux.capture_pane(tmux_name) do
+        output when is_binary(output) -> {:timeout, output}
+        _ -> {:timeout, ""}
+      end
+    else
+      Process.sleep(poll_interval)
+
+      case Tmux.capture_pane(tmux_name) do
+        output when is_binary(output) ->
+          case extract_exit_code(output) do
+            {:ok, exit_code, clean_output} ->
+              {:ok, {clean_output, exit_code}}
+
+            :not_found ->
+              do_wait_for_command(tmux_name, deadline, poll_interval, output)
+          end
+
+        {:error, _} = error ->
+          error
+      end
+    end
+  end
+
+  @exit_code_marker "BABYSITTER_EXIT_"
+  @exit_code_regex ~r/BABYSITTER_EXIT_(\d+)_CODE\b/
+
+  defp extract_exit_code(output) do
+    if String.contains?(output, @exit_code_marker) do
+      case Regex.run(@exit_code_regex, output) do
+        [full_match, exit_code_str] ->
+          exit_code = String.to_integer(exit_code_str)
+          clean_output = String.replace(output, full_match, "")
+          {:ok, exit_code, clean_output}
+
+        _ ->
+          :not_found
+      end
+    else
+      :not_found
+    end
   end
 
   defp run_in_tmux(tmux_name, command, opts) do
