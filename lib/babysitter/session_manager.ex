@@ -1,24 +1,17 @@
 defmodule Babysitter.SessionManager do
   @moduledoc """
-  GenServer for managing agent sessions with tmux integration.
+  GenServer for managing agent sessions.
 
   Responsibilities:
-  - Track active agent sessions
+  - Track active session IDs
+  - Spawn/terminate Session processes via SessionSupervisor
   - Provide session lookup by ID
-  - Handle session lifecycle (create, pause, resume, destroy)
-  - Integrate with tmux for terminal sessions
+  - Delegate lifecycle operations to Session processes
   """
 
   use GenServer
 
   @type session_id :: String.t()
-  @type session :: %{
-          id: session_id(),
-          status: :starting | :running | :paused | :stopping | :stopped,
-          started_at: DateTime.t(),
-          pid: pid() | nil,
-          tmux_name: String.t() | nil
-        }
 
   def start_link(opts \\ []) do
     name = Keyword.get(opts, :name, __MODULE__)
@@ -30,7 +23,10 @@ defmodule Babysitter.SessionManager do
   end
 
   def get_session(session_id) do
-    GenServer.call(__MODULE__, {:get_session, session_id})
+    case Babysitter.Session.whereis(session_id) do
+      nil -> {:error, :not_found}
+      _pid -> Babysitter.Session.get_state(session_id)
+    end
   end
 
   def list_sessions do
@@ -38,11 +34,17 @@ defmodule Babysitter.SessionManager do
   end
 
   def pause_session(session_id) do
-    GenServer.call(__MODULE__, {:pause_session, session_id})
+    case Babysitter.Session.whereis(session_id) do
+      nil -> {:error, :not_found}
+      _pid -> Babysitter.Session.pause(session_id)
+    end
   end
 
   def resume_session(session_id) do
-    GenServer.call(__MODULE__, {:resume_session, session_id})
+    case Babysitter.Session.whereis(session_id) do
+      nil -> {:error, :not_found}
+      _pid -> Babysitter.Session.resume(session_id)
+    end
   end
 
   def destroy_session(session_id) do
@@ -53,98 +55,82 @@ defmodule Babysitter.SessionManager do
     GenServer.call(__MODULE__, :clear)
   end
 
+  def append_output(session_id, output) do
+    case Babysitter.Session.whereis(session_id) do
+      nil -> {:error, :not_found}
+      _pid -> Babysitter.Session.append_output(session_id, output)
+    end
+  end
+
+  def get_output(session_id) do
+    case Babysitter.Session.whereis(session_id) do
+      nil -> {:error, :not_found}
+      _pid -> Babysitter.Session.get_output(session_id)
+    end
+  end
+
   @impl true
   def init(_opts) do
-    state = %{
-      sessions: %{}
-    }
-
-    {:ok, state}
+    {:ok, %{session_ids: MapSet.new()}}
   end
 
   @impl true
   def handle_call({:create_session, session_id, opts}, _from, state) do
-    tmux_name = Keyword.get(opts, :tmux_name, "babysitter-#{session_id}")
+    if MapSet.member?(state.session_ids, session_id) do
+      {:reply, {:error, :already_exists}, state}
+    else
+      spec = {Babysitter.Session, Keyword.put(opts, :id, session_id)}
 
-    case Babysitter.Tmux.create_session(tmux_name) do
-      :ok ->
-        session = %{
-          id: session_id,
-          status: :running,
-          started_at: DateTime.utc_now(),
-          pid: Keyword.get(opts, :pid),
-          tmux_name: tmux_name
-        }
+      case DynamicSupervisor.start_child(Babysitter.SessionSupervisor, spec) do
+        {:ok, _pid} ->
+          {:ok, session} = Babysitter.Session.get_state(session_id)
+          state = put_in(state, [:session_ids], MapSet.put(state.session_ids, session_id))
+          {:reply, {:ok, session}, state}
 
-        state = put_in(state, [:sessions, session_id], session)
-        {:reply, {:ok, session}, state}
+        {:error, {:already_started, _pid}} ->
+          {:reply, {:error, :already_exists}, state}
 
-      {:error, reason} ->
-        {:reply, {:error, {:tmux_error, reason}}, state}
-    end
-  end
-
-  def handle_call({:get_session, session_id}, _from, state) do
-    case Map.get(state.sessions, session_id) do
-      nil -> {:reply, {:error, :not_found}, state}
-      session -> {:reply, {:ok, session}, state}
+        {:error, reason} ->
+          {:reply, {:error, reason}, state}
+      end
     end
   end
 
   def handle_call(:list_sessions, _from, state) do
-    sessions = Map.values(state.sessions)
+    sessions =
+      state.session_ids
+      |> Enum.map(fn id ->
+        case Babysitter.Session.get_state(id) do
+          {:ok, session} -> session
+          _ -> nil
+        end
+      end)
+      |> Enum.reject(&is_nil/1)
+
     {:reply, sessions, state}
   end
 
-  def handle_call({:pause_session, session_id}, _from, state) do
-    case Map.get(state.sessions, session_id) do
-      nil ->
-        {:reply, {:error, :not_found}, state}
-
-      %{status: :paused} ->
-        {:reply, {:error, :already_paused}, state}
-
-      %{tmux_name: tmux_name} = session ->
-        Babysitter.Tmux.send_keys(tmux_name, "\x1A")
-        session = %{session | status: :paused}
-        state = put_in(state, [:sessions, session_id], session)
-        {:reply, {:ok, session}, state}
-    end
-  end
-
-  def handle_call({:resume_session, session_id}, _from, state) do
-    case Map.get(state.sessions, session_id) do
-      nil ->
-        {:reply, {:error, :not_found}, state}
-
-      %{status: :running} ->
-        {:reply, {:error, :not_paused}, state}
-
-      %{tmux_name: tmux_name} = session ->
-        Babysitter.Tmux.send_keys(tmux_name, "\x1A")
-        session = %{session | status: :running}
-        state = put_in(state, [:sessions, session_id], session)
-        {:reply, {:ok, session}, state}
-    end
-  end
-
   def handle_call({:destroy_session, session_id}, _from, state) do
-    case Map.get(state.sessions, session_id) do
+    case Babysitter.Session.whereis(session_id) do
       nil ->
         {:reply, {:error, :not_found}, state}
 
-      %{tmux_name: tmux_name} = _session ->
-        Babysitter.Tmux.kill_session(tmux_name)
-        state = update_in(state, [:sessions], &Map.delete(&1, session_id))
+      pid ->
+        Babysitter.Session.stop(session_id)
+        DynamicSupervisor.terminate_child(Babysitter.SessionSupervisor, pid)
+        state = put_in(state, [:session_ids], MapSet.delete(state.session_ids, session_id))
         {:reply, :ok, state}
     end
   end
 
   def handle_call(:clear, _from, state) do
-    for {_id, %{tmux_name: tmux_name}} <- state.sessions do
-      Babysitter.Tmux.kill_session(tmux_name)
+    for session_id <- state.session_ids do
+      if pid = Babysitter.Session.whereis(session_id) do
+        Babysitter.Session.stop(session_id)
+        DynamicSupervisor.terminate_child(Babysitter.SessionSupervisor, pid)
+      end
     end
 
-    {:reply, :ok, %{sessions: %{}}}
+    {:reply, :ok, %{session_ids: MapSet.new()}}
   end
 end

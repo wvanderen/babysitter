@@ -8,29 +8,36 @@ defmodule BabysitterWeb.SessionControllerTest do
     :ok
   end
 
+  defp unique_id(prefix) do
+    "#{prefix}-#{:rand.uniform(1_000_000)}"
+  end
+
   describe "GET /api/sessions" do
     test "lists all sessions" do
-      {:ok, _} = SessionManager.create_session("test-1")
-      {:ok, _} = SessionManager.create_session("test-2")
+      id1 = unique_id("test")
+      id2 = unique_id("test")
+      {:ok, _} = SessionManager.create_session(id1)
+      {:ok, _} = SessionManager.create_session(id2)
 
       conn = get(build_conn(), "/api/sessions")
       response = json_response(conn, 200)
 
       assert length(response["sessions"]) == 2
       ids = Enum.map(response["sessions"], & &1["id"])
-      assert "test-1" in ids
-      assert "test-2" in ids
+      assert id1 in ids
+      assert id2 in ids
     end
   end
 
   describe "GET /api/sessions/:id" do
     test "shows a session" do
-      {:ok, _} = SessionManager.create_session("test-3")
+      id = unique_id("test")
+      {:ok, _} = SessionManager.create_session(id)
 
-      conn = get(build_conn(), "/api/sessions/test-3")
+      conn = get(build_conn(), "/api/sessions/#{id}")
       response = json_response(conn, 200)
 
-      assert response["session"]["id"] == "test-3"
+      assert response["session"]["id"] == id
     end
 
     test "returns 404 for nonexistent session" do
@@ -41,14 +48,16 @@ defmodule BabysitterWeb.SessionControllerTest do
 
   describe "POST /api/sessions" do
     test "creates a session" do
+      id = unique_id("test")
+
       conn =
         post(build_conn(), "/api/sessions", %{
-          session: %{"id" => "test-4"}
+          session: %{"id" => id}
         })
 
       assert conn.status == 201
       response = json_response(conn, 201)
-      assert response["session"]["id"] == "test-4"
+      assert response["session"]["id"] == id
     end
 
     test "generates id if not provided" do
@@ -60,9 +69,10 @@ defmodule BabysitterWeb.SessionControllerTest do
 
   describe "DELETE /api/sessions/:id" do
     test "deletes a session" do
-      {:ok, _} = SessionManager.create_session("test-5")
+      id = unique_id("test")
+      {:ok, _} = SessionManager.create_session(id)
 
-      conn = delete(build_conn(), "/api/sessions/test-5")
+      conn = delete(build_conn(), "/api/sessions/#{id}")
       response = json_response(conn, 200)
 
       assert response["status"] == "deleted"

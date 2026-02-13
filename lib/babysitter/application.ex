@@ -16,6 +16,8 @@ defmodule Babysitter.Application do
     children = [
       BabysitterWeb.Telemetry,
       Babysitter.WorkflowStore,
+      {Registry, keys: :unique, name: Babysitter.SessionRegistry},
+      {DynamicSupervisor, strategy: :one_for_one, name: Babysitter.SessionSupervisor},
       Babysitter.SessionManager,
       {DynamicSupervisor, strategy: :one_for_one, name: Babysitter.WorkflowSupervisor},
       BabysitterWeb.Endpoint
