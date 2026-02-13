@@ -16,11 +16,23 @@ type Client struct {
 	wsConn     *websocket.Conn
 }
 
-func New(baseURL string) *Client {
-	return &Client{
+type ClientOption func(*Client)
+
+func WithHTTPClient(httpClient *http.Client) ClientOption {
+	return func(c *Client) {
+		c.httpClient = httpClient
+	}
+}
+
+func New(baseURL string, opts ...ClientOption) *Client {
+	c := &Client{
 		baseURL:    baseURL,
 		httpClient: &http.Client{},
 	}
+	for _, opt := range opts {
+		opt(c)
+	}
+	return c
 }
 
 type Session struct {
@@ -39,92 +51,154 @@ type SessionList struct {
 	Sessions []Session `json:"sessions"`
 }
 
-func (c *Client) ListSessions() (*SessionList, error) {
-	resp, err := c.httpClient.Get(c.baseURL + "/api/sessions")
+type Workflow struct {
+	ID        string  `json:"id"`
+	Name      string  `json:"name"`
+	Stages    []Stage `json:"stages"`
+	Status    string  `json:"status"`
+	CreatedAt string  `json:"created_at"`
+}
+
+type Stage struct {
+	ID        string                 `json:"id"`
+	Type      string                 `json:"type"`
+	Config    map[string]interface{} `json:"config"`
+	OnSuccess string                 `json:"on_success,omitempty"`
+	OnFailure string                 `json:"on_failure,omitempty"`
+	OnTimeout string                 `json:"on_timeout,omitempty"`
+}
+
+type WorkflowList struct {
+	Workflows []Workflow `json:"workflows"`
+}
+
+type APIError struct {
+	StatusCode int
+	Message    string
+}
+
+func (e *APIError) Error() string {
+	return fmt.Sprintf("API error %d: %s", e.StatusCode, e.Message)
+}
+
+func (c *Client) doRequest(method, path string, body interface{}, result interface{}) error {
+	var reqBody io.Reader
+	if body != nil {
+		jsonBody, err := json.Marshal(body)
+		if err != nil {
+			return fmt.Errorf("failed to marshal request: %w", err)
+		}
+		reqBody = bytes.NewReader(jsonBody)
+	}
+
+	req, err := http.NewRequest(method, c.baseURL+path, reqBody)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list sessions: %w", err)
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status: %d", resp.StatusCode)
+	if resp.StatusCode >= 400 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return &APIError{
+			StatusCode: resp.StatusCode,
+			Message:    string(respBody),
+		}
 	}
 
+	if result != nil {
+		if err := json.NewDecoder(resp.Body).Decode(result); err != nil {
+			return fmt.Errorf("failed to decode response: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (c *Client) ListSessions() (*SessionList, error) {
 	var list SessionList
-	if err := json.NewDecoder(resp.Body).Decode(&list); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+	if err := c.doRequest("GET", "/api/sessions", nil, &list); err != nil {
+		return nil, err
 	}
-
 	return &list, nil
 }
 
 func (c *Client) GetSession(id string) (*Session, error) {
-	resp, err := c.httpClient.Get(fmt.Sprintf("%s/api/sessions/%s", c.baseURL, id))
-	if err != nil {
-		return nil, fmt.Errorf("failed to get session: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status: %d", resp.StatusCode)
-	}
-
-	var sess Session
-	if err := json.NewDecoder(resp.Body).Decode(&sess); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return &sess, nil
-}
-
-func (c *Client) StartWorkflow(workflowID, issueID string) (*Session, error) {
-	body := map[string]string{
-		"issue_id": issueID,
-	}
-	jsonBody, _ := json.Marshal(body)
-
-	resp, err := c.httpClient.Post(
-		fmt.Sprintf("%s/api/workflows/%s/start", c.baseURL, workflowID),
-		"application/json",
-		bytes.NewReader(jsonBody),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to start workflow: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(respBody))
-	}
-
-	var sess Session
-	if err := json.NewDecoder(resp.Body).Decode(&sess); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return &sess, nil
-}
-
-func (c *Client) AttachCommand(sessionID string) (string, error) {
-	resp, err := c.httpClient.Post(
-		fmt.Sprintf("%s/api/sessions/%s/attach", c.baseURL, sessionID),
-		"application/json",
-		nil,
-	)
-	if err != nil {
-		return "", fmt.Errorf("failed to get attach command: %w", err)
-	}
-	defer resp.Body.Close()
-
 	var result struct {
-		Command string `json:"command"`
+		Session Session `json:"session"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", fmt.Errorf("failed to decode response: %w", err)
+	if err := c.doRequest("GET", "/api/sessions/"+id, nil, &result); err != nil {
+		return nil, err
 	}
+	return &result.Session, nil
+}
 
-	return result.Command, nil
+func (c *Client) CreateSession(opts map[string]interface{}) (*Session, error) {
+	body := map[string]interface{}{"session": opts}
+	var result struct {
+		Session Session `json:"session"`
+	}
+	if err := c.doRequest("POST", "/api/sessions", body, &result); err != nil {
+		return nil, err
+	}
+	return &result.Session, nil
+}
+
+func (c *Client) DeleteSession(id string) error {
+	return c.doRequest("DELETE", "/api/sessions/"+id, nil, nil)
+}
+
+func (c *Client) PauseSession(id string) error {
+	return c.doRequest("POST", "/api/sessions/"+id+"/pause", nil, nil)
+}
+
+func (c *Client) ResumeSession(id string) error {
+	return c.doRequest("POST", "/api/sessions/"+id+"/resume", nil, nil)
+}
+
+func (c *Client) ListWorkflows() (*WorkflowList, error) {
+	var list WorkflowList
+	if err := c.doRequest("GET", "/api/workflows", nil, &list); err != nil {
+		return nil, err
+	}
+	return &list, nil
+}
+
+func (c *Client) GetWorkflow(id string) (*Workflow, error) {
+	var result struct {
+		Workflow Workflow `json:"workflow"`
+	}
+	if err := c.doRequest("GET", "/api/workflows/"+id, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result.Workflow, nil
+}
+
+func (c *Client) CreateWorkflow(name string, stages []Stage) (*Workflow, error) {
+	body := map[string]interface{}{
+		"workflow": map[string]interface{}{
+			"name":   name,
+			"stages": stages,
+		},
+	}
+	var result struct {
+		Workflow Workflow `json:"workflow"`
+	}
+	if err := c.doRequest("POST", "/api/workflows", body, &result); err != nil {
+		return nil, err
+	}
+	return &result.Workflow, nil
+}
+
+func (c *Client) ExecuteWorkflow(workflowID string) error {
+	return c.doRequest("POST", "/api/workflows/"+workflowID+"/execute", nil, nil)
 }
 
 type WSMessage struct {

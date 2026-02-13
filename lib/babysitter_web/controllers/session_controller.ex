@@ -49,6 +49,40 @@ defmodule BabysitterWeb.SessionController do
     end
   end
 
+  def pause(conn, %{"id" => id}) do
+    case SessionManager.pause_session(id) do
+      {:ok, session} ->
+        json(conn, %{session: session})
+
+      {:error, :not_found} ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{error: "Session not found"})
+
+      {:error, reason} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: inspect(reason)})
+    end
+  end
+
+  def resume(conn, %{"id" => id}) do
+    case SessionManager.resume_session(id) do
+      {:ok, session} ->
+        json(conn, %{session: session})
+
+      {:error, :not_found} ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{error: "Session not found"})
+
+      {:error, reason} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: inspect(reason)})
+    end
+  end
+
   defp generate_session_id do
     :crypto.strong_rand_bytes(8) |> Base.encode16(case: :lower)
   end
