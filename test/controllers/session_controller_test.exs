@@ -65,7 +65,7 @@ defmodule BabysitterWeb.SessionControllerTest do
       conn = delete(build_conn(), "/api/sessions/test-5")
       response = json_response(conn, 200)
 
-      assert response["session"]["status"] == "stopped"
+      assert response["status"] == "deleted"
     end
 
     test "returns 404 for nonexistent session" do

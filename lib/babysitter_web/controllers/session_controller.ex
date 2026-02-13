@@ -39,8 +39,8 @@ defmodule BabysitterWeb.SessionController do
 
   def delete(conn, %{"id" => id}) do
     case SessionManager.destroy_session(id) do
-      {:ok, session} ->
-        json(conn, %{session: session})
+      :ok ->
+        json(conn, %{status: "deleted"})
 
       {:error, :not_found} ->
         conn
