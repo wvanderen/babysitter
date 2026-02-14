@@ -35,4 +35,15 @@ defmodule Babysitter.WorkflowStore do
     Agent.update(__MODULE__, fn _ -> %{} end)
     :ok
   end
+
+  def count do
+    Agent.get(__MODULE__, &map_size/1)
+  end
+
+  def ready? do
+    case Process.whereis(__MODULE__) do
+      nil -> false
+      pid -> Process.alive?(pid)
+    end
+  end
 end
