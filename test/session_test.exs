@@ -240,6 +240,119 @@ defmodule Babysitter.SessionTest do
     end
   end
 
+  describe "validation_results" do
+    alias Babysitter.Validation.Result
+
+    test "starts with empty validation results", %{session_id: id} do
+      {:ok, _pid} = start_session(id)
+
+      {:ok, results} = Session.get_validation_results(id)
+      assert results == %{}
+
+      stop_session(id)
+    end
+
+    test "stores validation result for a stage", %{session_id: id} do
+      {:ok, _pid} = start_session(id)
+
+      result = Result.pass(:test, "All tests passed", exit_code: 0)
+      :ok = Session.store_validation_result(id, :build_stage, result)
+
+      Process.sleep(10)
+
+      {:ok, results} = Session.get_validation_results(id)
+      assert Map.has_key?(results, :build_stage)
+      assert length(results[:build_stage]) == 1
+      assert hd(results[:build_stage]).status == :pass
+
+      stop_session(id)
+    end
+
+    test "stores multiple results for same stage", %{session_id: id} do
+      {:ok, _pid} = start_session(id)
+
+      result1 = Result.pass(:compile, "Compiled", exit_code: 0)
+      result2 = Result.fail(:compile, "Failed", exit_code: 1)
+
+      Session.store_validation_result(id, :compile_stage, result1)
+      Session.store_validation_result(id, :compile_stage, result2)
+
+      Process.sleep(10)
+
+      {:ok, results} = Session.get_validation_results(id, :compile_stage)
+      assert length(results) == 2
+
+      stop_session(id)
+    end
+
+    test "gets results for specific stage", %{session_id: id} do
+      {:ok, _pid} = start_session(id)
+
+      result = Result.pass(:test, "Tests passed", exit_code: 0)
+      Session.store_validation_result(id, :test_stage, result)
+
+      Process.sleep(10)
+
+      {:ok, results} = Session.get_validation_results(id, :test_stage)
+      assert length(results) == 1
+
+      {:ok, other_results} = Session.get_validation_results(id, :other_stage)
+      assert other_results == []
+
+      stop_session(id)
+    end
+
+    test "clears all validation results", %{session_id: id} do
+      {:ok, _pid} = start_session(id)
+
+      result = Result.pass(:test, "Tests passed", exit_code: 0)
+      Session.store_validation_result(id, :stage1, result)
+      Session.store_validation_result(id, :stage2, result)
+
+      Process.sleep(10)
+
+      :ok = Session.clear_validation_results(id)
+
+      {:ok, results} = Session.get_validation_results(id)
+      assert results == %{}
+
+      stop_session(id)
+    end
+
+    test "clears validation results for specific stage", %{session_id: id} do
+      {:ok, _pid} = start_session(id)
+
+      result = Result.pass(:test, "Tests passed", exit_code: 0)
+      Session.store_validation_result(id, :stage1, result)
+      Session.store_validation_result(id, :stage2, result)
+
+      Process.sleep(10)
+
+      :ok = Session.clear_validation_results(id, :stage1)
+
+      {:ok, results} = Session.get_validation_results(id)
+      refute Map.has_key?(results, :stage1)
+      assert Map.has_key?(results, :stage2)
+
+      stop_session(id)
+    end
+
+    test "validation results included in state serialization", %{session_id: id} do
+      {:ok, _pid} = start_session(id)
+
+      result = Result.pass(:test, "Tests passed", exit_code: 0)
+      Session.store_validation_result(id, :test_stage, result)
+
+      Process.sleep(10)
+
+      {:ok, state} = Session.get_state(id)
+      json = Jason.encode!(state)
+      assert String.contains?(json, "validation_results")
+
+      stop_session(id)
+    end
+  end
+
   defp start_session(id, opts \\ []) do
     opts = Keyword.put(opts, :id, id)
     DynamicSupervisor.start_child(Babysitter.SessionSupervisor, {Session, opts})

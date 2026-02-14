@@ -34,7 +34,8 @@ defmodule Babysitter.StageExecutor do
             session_id: String.t(),
             started_at: DateTime.t(),
             finished_at: DateTime.t(),
-            error: String.t() | nil
+            error: String.t() | nil,
+            validation_errors: [String.t()] | nil
           }
 
     @enforce_keys [:stage_id, :session_id, :started_at, :finished_at]
@@ -46,7 +47,8 @@ defmodule Babysitter.StageExecutor do
       status: :failure,
       output: "",
       exit_code: nil,
-      error: nil
+      error: nil,
+      validation_errors: nil
     ]
 
     @spec success?(t()) :: boolean()
@@ -134,6 +136,7 @@ defmodule Babysitter.StageExecutor do
             exit_code: exit_code
           }
 
+          result = run_validations(result, stage, session_id)
           {:ok, result}
 
         {:timeout, output} ->
@@ -198,6 +201,7 @@ defmodule Babysitter.StageExecutor do
               finished_at
             )
 
+          result = run_validations(result, stage, session_id)
           {:ok, result}
 
         {:error, reason} ->
@@ -255,6 +259,7 @@ defmodule Babysitter.StageExecutor do
             exit_code: 0
           }
 
+          result = run_validations(result, stage, session_id)
           {:ok, result}
 
         {:timeout, output} ->
@@ -312,6 +317,37 @@ defmodule Babysitter.StageExecutor do
       :ok
     else
       {:error, errors}
+    end
+  end
+
+  @doc """
+  Run stage validations and update result if any fail.
+
+  Returns the result with status set to :failure if validations fail.
+  Also stores validation result in the session.
+  """
+  @spec run_validations(Result.t(), Stage.t(), String.t()) :: Result.t()
+  def run_validations(%Result{} = result, %Stage{validations: []}, _session_id), do: result
+
+  def run_validations(%Result{} = result, %Stage{validations: validations}, session_id) do
+    case validate_result(result, validations) do
+      :ok ->
+        result
+
+      {:error, errors} ->
+        validation_result = %Babysitter.Validation.Result{
+          type: :custom,
+          status: :fail,
+          output: result.output,
+          exit_code: result.exit_code,
+          error: Enum.join(errors, "; "),
+          started_at: result.started_at,
+          finished_at: result.finished_at
+        }
+
+        Session.store_validation_result(session_id, result.stage_id, validation_result)
+
+        %{result | status: :failure, validation_errors: errors}
     end
   end
 

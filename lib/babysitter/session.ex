@@ -33,7 +33,8 @@ defmodule Babysitter.Session do
              :started_at,
              :metadata,
              :failure_reason,
-             :escalation_reason
+             :escalation_reason,
+             :validation_results
            ]}
   @type t :: %__MODULE__{
           id: session_id(),
@@ -43,7 +44,8 @@ defmodule Babysitter.Session do
           output_buffer: String.t(),
           buffer_size: non_neg_integer(),
           max_buffer_size: non_neg_integer(),
-          metadata: map()
+          metadata: map(),
+          validation_results: %{optional(term()) => [Babysitter.Validation.Result.t()]}
         }
 
   @enforce_keys [:id]
@@ -57,7 +59,8 @@ defmodule Babysitter.Session do
     max_buffer_size: 100_000,
     metadata: %{},
     failure_reason: nil,
-    escalation_reason: nil
+    escalation_reason: nil,
+    validation_results: %{}
   ]
 
   @valid_transitions %{
@@ -146,6 +149,18 @@ defmodule Babysitter.Session do
 
   def valid_transitions_for(id) do
     GenServer.call(via_tuple(id), :valid_transitions)
+  end
+
+  def store_validation_result(id, stage_id, result) do
+    GenServer.cast(via_tuple(id), {:store_validation_result, stage_id, result})
+  end
+
+  def get_validation_results(id, stage_id \\ nil) do
+    GenServer.call(via_tuple(id), {:get_validation_results, stage_id})
+  end
+
+  def clear_validation_results(id, stage_id \\ nil) do
+    GenServer.call(via_tuple(id), {:clear_validation_results, stage_id})
   end
 
   @impl true
@@ -254,11 +269,36 @@ defmodule Babysitter.Session do
     {:reply, :ok, %{state | output_buffer: "", buffer_size: 0}}
   end
 
+  def handle_call({:get_validation_results, nil}, _from, state) do
+    {:reply, {:ok, state.validation_results}, state}
+  end
+
+  def handle_call({:get_validation_results, stage_id}, _from, state) do
+    results = Map.get(state.validation_results, stage_id, [])
+    {:reply, {:ok, results}, state}
+  end
+
+  def handle_call({:clear_validation_results, nil}, _from, state) do
+    {:reply, :ok, %{state | validation_results: %{}}}
+  end
+
+  def handle_call({:clear_validation_results, stage_id}, _from, state) do
+    new_results = Map.delete(state.validation_results, stage_id)
+    {:reply, :ok, %{state | validation_results: new_results}}
+  end
+
   @impl true
   def handle_cast({:append_output, output}, state) do
     new_buffer = append_to_buffer(state.output_buffer, output, state.max_buffer_size)
     new_size = byte_size(new_buffer)
     {:noreply, %{state | output_buffer: new_buffer, buffer_size: new_size}}
+  end
+
+  def handle_cast({:store_validation_result, stage_id, result}, state) do
+    current_results = Map.get(state.validation_results, stage_id, [])
+    updated_results = current_results ++ [result]
+    new_validation_results = Map.put(state.validation_results, stage_id, updated_results)
+    {:noreply, %{state | validation_results: new_validation_results}}
   end
 
   @impl true

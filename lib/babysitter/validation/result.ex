@@ -6,6 +6,19 @@ defmodule Babysitter.Validation.Result do
   generated during validation.
   """
 
+  @derive {Jason.Encoder,
+           only: [
+             :type,
+             :status,
+             :output,
+             :exit_code,
+             :error,
+             :started_at,
+             :finished_at,
+             :duration_ms,
+             :artifacts
+           ]}
+
   @type validation_type :: :test | :compile | :lint | :command | :custom
 
   @type status :: :pass | :fail | :error | :skipped

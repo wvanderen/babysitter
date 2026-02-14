@@ -174,6 +174,76 @@ defmodule Babysitter.StageExecutorTest do
     end
   end
 
+  describe "run_validations/3 integration" do
+    test "action stage with passing validations remains success", %{session_id: session_id} do
+      stage =
+        Stage.action(:validated, "echo 'Build succeeded'",
+          validations: [
+            Validation.output_contains("succeeded"),
+            Validation.exit_code(0)
+          ]
+        )
+
+      assert {:ok, result} = StageExecutor.execute(stage, session_id)
+      assert result.status == :success
+      assert result.validation_errors == nil
+    end
+
+    test "action stage with failing validations becomes failure", %{session_id: session_id} do
+      stage =
+        Stage.action(:validated, "echo 'Build done'",
+          validations: [
+            Validation.output_contains("succeeded")
+          ]
+        )
+
+      assert {:ok, result} = StageExecutor.execute(stage, session_id)
+      assert result.status == :failure
+      assert result.validation_errors != nil
+      assert length(result.validation_errors) == 1
+    end
+
+    test "validation results are stored in session", %{session_id: session_id} do
+      stage =
+        Stage.action(:store_test, "echo 'output'",
+          validations: [
+            Validation.output_contains("missing")
+          ]
+        )
+
+      {:ok, _result} = StageExecutor.execute(stage, session_id)
+
+      {:ok, session} = Babysitter.Session.get_state(session_id)
+      assert Map.has_key?(session.validation_results, :store_test)
+    end
+
+    test "agent stage with passing validations remains success", %{session_id: session_id} do
+      stage =
+        Stage.agent(:agent_validated, "echo 'Task complete'",
+          validations: [
+            Validation.output_contains("complete")
+          ]
+        )
+
+      assert {:ok, result} = StageExecutor.execute(stage, session_id)
+      assert result.status == :success
+      assert result.validation_errors == nil
+    end
+
+    test "agent stage with failing validations becomes failure", %{session_id: session_id} do
+      stage =
+        Stage.agent(:agent_fail, "echo 'done'",
+          validations: [
+            Validation.output_contains("SUCCESS_MARKER")
+          ]
+        )
+
+      assert {:ok, result} = StageExecutor.execute(stage, session_id)
+      assert result.status == :failure
+      assert result.validation_errors != nil
+    end
+  end
+
   describe "Result" do
     test "success?/1 returns true for success status" do
       result = %StageExecutor.Result{
