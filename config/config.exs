@@ -10,6 +10,10 @@ config :babysitter, Babysitter.TD.Repo,
   database: ".todos/issues.db",
   pool_size: 5
 
+config :babysitter, Babysitter.State.Repo,
+  database: ".todos/session_states.db",
+  pool_size: 5
+
 config :logger, :console,
   format: "$time $metadata[$level] $message\n",
   metadata: [:request_id]

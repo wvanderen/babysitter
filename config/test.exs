@@ -9,4 +9,8 @@ config :babysitter, Babysitter.TD.Repo,
   database: ".todos/test_issues.db",
   pool_size: 5
 
+config :babysitter, Babysitter.State.Repo,
+  database: ".todos/test_session_states.db",
+  pool_size: 5
+
 config :logger, level: :warning

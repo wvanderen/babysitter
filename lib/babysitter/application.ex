@@ -16,6 +16,7 @@ defmodule Babysitter.Application do
     children = [
       BabysitterWeb.Telemetry,
       Babysitter.TD.Repo,
+      Babysitter.State.Repo,
       Babysitter.WorkflowStore,
       {Registry, keys: :unique, name: Babysitter.SessionRegistry},
       {Registry, keys: :unique, name: Babysitter.OutputCaptureRegistry},
