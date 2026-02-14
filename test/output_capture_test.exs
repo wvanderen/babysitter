@@ -8,8 +8,11 @@ defmodule Babysitter.OutputCaptureTest do
       session_name = "test-capture-#{:erlang.unique_integer([:positive])}"
       capture_id = "capture-#{:erlang.unique_integer([:positive])}"
       assert :ok = Tmux.create_session(session_name)
+
       try do
-        assert {:ok, pid} = OutputCapture.start_capture(id: capture_id, session_name: session_name)
+        assert {:ok, pid} =
+                 OutputCapture.start_capture(id: capture_id, session_name: session_name)
+
         assert is_pid(pid)
         assert :ok = OutputCapture.stop_capture(capture_id)
       after
@@ -19,7 +22,12 @@ defmodule Babysitter.OutputCaptureTest do
 
     test "returns error for non-existent session" do
       capture_id = "capture-#{:erlang.unique_integer([:positive])}"
-      assert {:error, :session_not_found} = OutputCapture.start_capture(id: capture_id, session_name: "nonexistent-session-xyz")
+
+      assert {:error, :session_not_found} =
+               OutputCapture.start_capture(
+                 id: capture_id,
+                 session_name: "nonexistent-session-xyz"
+               )
     end
   end
 
@@ -28,6 +36,7 @@ defmodule Babysitter.OutputCaptureTest do
       session_name = "test-output-#{:erlang.unique_integer([:positive])}"
       capture_id = "capture-#{:erlang.unique_integer([:positive])}"
       :ok = Tmux.create_session(session_name)
+
       try do
         {:ok, _pid} = OutputCapture.start_capture(id: capture_id, session_name: session_name)
         :ok = Tmux.send_keys(session_name, "echo test-output-123")
@@ -50,6 +59,7 @@ defmodule Babysitter.OutputCaptureTest do
       session_name = "test-clear-#{:erlang.unique_integer([:positive])}"
       capture_id = "capture-#{:erlang.unique_integer([:positive])}"
       :ok = Tmux.create_session(session_name)
+
       try do
         {:ok, _pid} = OutputCapture.start_capture(id: capture_id, session_name: session_name)
         :ok = Tmux.send_keys(session_name, "echo hello-world-unique-123")
@@ -71,6 +81,7 @@ defmodule Babysitter.OutputCaptureTest do
       session_name = "test-pause-#{:erlang.unique_integer([:positive])}"
       capture_id = "capture-#{:erlang.unique_integer([:positive])}"
       :ok = Tmux.create_session(session_name)
+
       try do
         {:ok, _pid} = OutputCapture.start_capture(id: capture_id, session_name: session_name)
         assert :ok = OutputCapture.pause(capture_id)
@@ -87,6 +98,7 @@ defmodule Babysitter.OutputCaptureTest do
       session_name = "test-subscribe-#{:erlang.unique_integer([:positive])}"
       capture_id = "capture-#{:erlang.unique_integer([:positive])}"
       :ok = Tmux.create_session(session_name)
+
       try do
         {:ok, _pid} = OutputCapture.start_capture(id: capture_id, session_name: session_name)
         assert :ok = OutputCapture.subscribe(capture_id)
@@ -103,6 +115,7 @@ defmodule Babysitter.OutputCaptureTest do
       session_name = "test-stop-#{:erlang.unique_integer([:positive])}"
       capture_id = "capture-#{:erlang.unique_integer([:positive])}"
       :ok = Tmux.create_session(session_name)
+
       try do
         {:ok, _pid} = OutputCapture.start_capture(id: capture_id, session_name: session_name)
         assert :ok = OutputCapture.stop_capture(capture_id)
@@ -118,6 +131,7 @@ defmodule Babysitter.OutputCaptureTest do
       session_name = "test-state-#{:erlang.unique_integer([:positive])}"
       capture_id = "capture-#{:erlang.unique_integer([:positive])}"
       :ok = Tmux.create_session(session_name)
+
       try do
         {:ok, _pid} = OutputCapture.start_capture(id: capture_id, session_name: session_name)
         assert {:ok, state} = OutputCapture.get_state(capture_id)
@@ -136,8 +150,15 @@ defmodule Babysitter.OutputCaptureTest do
       session_name = "test-buffer-#{:erlang.unique_integer([:positive])}"
       capture_id = "capture-#{:erlang.unique_integer([:positive])}"
       :ok = Tmux.create_session(session_name)
+
       try do
-        {:ok, _pid} = OutputCapture.start_capture(id: capture_id, session_name: session_name, max_buffer_size: 100)
+        {:ok, _pid} =
+          OutputCapture.start_capture(
+            id: capture_id,
+            session_name: session_name,
+            max_buffer_size: 100
+          )
+
         Process.sleep(100)
         {:ok, state} = OutputCapture.get_state(capture_id)
         assert state.max_buffer_size == 100
