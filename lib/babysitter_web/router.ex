@@ -17,6 +17,7 @@ defmodule BabysitterWeb.Router do
     resources("/sessions", SessionController, only: [:index, :show, :create, :delete])
     post("/sessions/:id/pause", SessionController, :pause)
     post("/sessions/:id/resume", SessionController, :resume)
+    post("/sessions/:id/intervene", SessionController, :intervene)
 
     resources "/workflows", WorkflowController, only: [:index, :show, :create] do
       post("/execute", WorkflowController, :execute)

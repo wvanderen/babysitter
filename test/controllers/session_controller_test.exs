@@ -83,4 +83,82 @@ defmodule BabysitterWeb.SessionControllerTest do
       assert conn.status == 404
     end
   end
+
+  describe "POST /api/sessions/:id/intervene" do
+    test "performs retry action" do
+      id = unique_id("test")
+      {:ok, _} = SessionManager.create_session(id)
+      {:ok, _} = Babysitter.Session.pause(id)
+
+      conn =
+        post(build_conn(), "/api/sessions/#{id}/intervene", %{
+          action: "retry",
+          reason: "Manual retry"
+        })
+
+      response = json_response(conn, 200)
+      assert response["status"] == "ok"
+      assert response["action"] == "retry"
+    end
+
+    test "performs escalate action" do
+      id = unique_id("test")
+      {:ok, _} = SessionManager.create_session(id)
+
+      conn =
+        post(build_conn(), "/api/sessions/#{id}/intervene", %{
+          action: "escalate",
+          reason: "Manual escalation"
+        })
+
+      response = json_response(conn, 200)
+      assert response["status"] == "ok"
+      assert response["action"] == "escalate"
+    end
+
+    test "performs skip action" do
+      id = unique_id("test")
+      {:ok, _} = SessionManager.create_session(id)
+
+      conn =
+        post(build_conn(), "/api/sessions/#{id}/intervene", %{
+          action: "skip",
+          reason: "Skip this stage"
+        })
+
+      response = json_response(conn, 200)
+      assert response["status"] == "ok"
+      assert response["action"] == "skip"
+    end
+
+    test "returns 404 for nonexistent session" do
+      conn =
+        post(build_conn(), "/api/sessions/nonexistent/intervene", %{
+          action: "retry"
+        })
+
+      assert conn.status == 404
+    end
+
+    test "returns 400 for missing action" do
+      id = unique_id("test")
+      {:ok, _} = SessionManager.create_session(id)
+
+      conn = post(build_conn(), "/api/sessions/#{id}/intervene", %{})
+
+      assert conn.status == 400
+    end
+
+    test "returns 400 for unknown action" do
+      id = unique_id("test")
+      {:ok, _} = SessionManager.create_session(id)
+
+      conn =
+        post(build_conn(), "/api/sessions/#{id}/intervene", %{
+          action: "invalid_action"
+        })
+
+      assert conn.status == 400
+    end
+  end
 end

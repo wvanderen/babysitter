@@ -51,6 +51,13 @@ defmodule Babysitter.SessionManager do
     GenServer.call(__MODULE__, {:destroy_session, session_id})
   end
 
+  def intervene_session(session_id, action, opts \\ []) do
+    case Babysitter.Session.whereis(session_id) do
+      nil -> {:error, :not_found}
+      _pid -> Babysitter.Session.intervene(session_id, action, opts)
+    end
+  end
+
   def clear do
     GenServer.call(__MODULE__, :clear)
   end

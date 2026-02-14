@@ -151,6 +151,10 @@ defmodule Babysitter.Session do
     GenServer.call(via_tuple(id), :valid_transitions)
   end
 
+  def intervene(id, action, opts \\ []) do
+    GenServer.call(via_tuple(id), {:intervene, action, opts})
+  end
+
   def store_validation_result(id, stage_id, result) do
     GenServer.cast(via_tuple(id), {:store_validation_result, stage_id, result})
   end
@@ -240,6 +244,39 @@ defmodule Babysitter.Session do
       {:reply, {:ok, :escalated}, %{state | status: :escalated, escalation_reason: reason}}
     else
       {:error, _} = error -> {:reply, error, state}
+    end
+  end
+
+  def handle_call({:intervene, action, opts}, _from, state) do
+    reason = Keyword.get(opts, :reason)
+
+    case action do
+      :retry ->
+        with :ok <- validate_transition(state.status, :running) do
+          {:reply, {:ok, :retry}, %{state | status: :running, failure_reason: nil}}
+        else
+          {:error, _} = error -> {:reply, error, state}
+        end
+
+      :restart ->
+        with :ok <- validate_transition(state.status, :running) do
+          {:reply, {:ok, :restart}, %{state | status: :running, failure_reason: nil}}
+        else
+          {:error, _} = error -> {:reply, error, state}
+        end
+
+      :escalate ->
+        with :ok <- validate_transition(state.status, :escalated) do
+          {:reply, {:ok, :escalated}, %{state | status: :escalated, escalation_reason: reason}}
+        else
+          {:error, _} = error -> {:reply, error, state}
+        end
+
+      :skip ->
+        {:reply, {:ok, :skip}, state}
+
+      _ ->
+        {:reply, {:error, {:unknown_action, action}}, state}
     end
   end
 

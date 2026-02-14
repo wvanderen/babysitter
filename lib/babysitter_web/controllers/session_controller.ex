@@ -83,6 +83,61 @@ defmodule BabysitterWeb.SessionController do
     end
   end
 
+  @valid_intervention_actions [:retry, :restart, :escalate, :skip]
+
+  def intervene(conn, %{"id" => id, "action" => action}) do
+    case parse_intervention_action(action) do
+      {:ok, action_atom} ->
+        reason = Map.get(conn.params, "reason")
+        opts = if reason, do: [reason: reason], else: []
+
+        case SessionManager.intervene_session(id, action_atom, opts) do
+          {:ok, result} ->
+            json(conn, %{status: "ok", action: action, result: result})
+
+          {:error, :not_found} ->
+            conn
+            |> put_status(:not_found)
+            |> json(%{error: "Session not found"})
+
+          {:error, reason} ->
+            conn
+            |> put_status(:unprocessable_entity)
+            |> json(%{error: inspect(reason)})
+        end
+
+      {:error, :invalid_action} ->
+        conn
+        |> put_status(:bad_request)
+        |> json(%{
+          error:
+            "Invalid action: #{action}. Valid actions: #{Enum.join(@valid_intervention_actions, ", ")}"
+        })
+    end
+  end
+
+  def intervene(conn, %{"id" => _id}) do
+    conn
+    |> put_status(:bad_request)
+    |> json(%{error: "Missing required parameter: action"})
+  end
+
+  defp parse_intervention_action(action) when is_binary(action) do
+    try do
+      atom = String.to_existing_atom(action)
+
+      if atom in @valid_intervention_actions do
+        {:ok, atom}
+      else
+        {:error, :invalid_action}
+      end
+    rescue
+      ArgumentError -> {:error, :invalid_action}
+    end
+  end
+
+  defp parse_intervention_action(_), do: {:error, :invalid_action}
+
   defp generate_session_id do
     :crypto.strong_rand_bytes(8) |> Base.encode16(case: :lower)
   end
