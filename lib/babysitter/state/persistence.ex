@@ -162,4 +162,77 @@ defmodule Babysitter.State.Persistence do
     |> Enum.map(fn {k, v} -> {to_string(k), v} end)
     |> Map.new()
   end
+
+  @doc """
+  Save workflow instance state to the database.
+  """
+  @spec save_workflow_state(map()) :: {:ok, SessionState.t()} | {:error, Ecto.Changeset.t()}
+  def save_workflow_state(%{id: id} = workflow_state) do
+    attrs = workflow_to_attrs(workflow_state)
+
+    case Repo.get(SessionState, id) do
+      nil ->
+        %SessionState{id: id}
+        |> Ecto.Changeset.change(attrs)
+        |> Repo.insert()
+
+      existing ->
+        existing
+        |> Ecto.Changeset.change(attrs)
+        |> Repo.update()
+    end
+  end
+
+  @doc """
+  Load workflow instance state from the database.
+  """
+  @spec load_workflow_state(String.t()) :: {:ok, map()} | {:error, :not_found}
+  def load_workflow_state(id) do
+    case Repo.get(SessionState, id) do
+      nil -> {:error, :not_found}
+      state -> {:ok, attrs_to_workflow(state)}
+    end
+  end
+
+  defp workflow_to_attrs(workflow) do
+    %{
+      status: to_string(Map.get(workflow, :status, "pending")),
+      started_at: Map.get(workflow, :started_at) |> to_naive_datetime(),
+      metadata: %{
+        workflow_id: Map.get(workflow, :workflow_id),
+        current_stage: Map.get(workflow, :current_stage),
+        session_id: Map.get(workflow, :session_id),
+        variables: Map.get(workflow, :variables, %{}),
+        failure_reason: Map.get(workflow, :failure_reason),
+        escalation_reason: Map.get(workflow, :escalation_reason),
+        retry_count: Map.get(workflow, :retry_count, 0),
+        max_retries: Map.get(workflow, :max_retries, 3),
+        execution_history: Map.get(workflow, :execution_history, [])
+      },
+      session_data: %{
+        completed_at: Map.get(workflow, :completed_at) |> to_naive_datetime()
+      }
+    }
+  end
+
+  defp attrs_to_workflow(%SessionState{} = state) do
+    meta = state.metadata || %{}
+    session_data = state.session_data || %{}
+
+    %{
+      id: state.id,
+      workflow_id: meta["workflow_id"],
+      status: String.to_atom(state.status),
+      current_stage: meta["current_stage"] && String.to_atom(meta["current_stage"]),
+      session_id: meta["session_id"],
+      started_at: state.started_at,
+      completed_at: session_data["completed_at"],
+      variables: meta["variables"] || %{},
+      failure_reason: meta["failure_reason"],
+      escalation_reason: meta["escalation_reason"],
+      retry_count: meta["retry_count"] || 0,
+      max_retries: meta["max_retries"] || 3,
+      execution_history: meta["execution_history"] || []
+    }
+  end
 end
