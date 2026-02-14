@@ -1,0 +1,49 @@
+id: feature-implementation
+name: Feature Implementation
+description: Full feature implementation workflow from td issues
+intelligence: hybrid
+
+stages:
+  - id: planning
+    type: action
+    command: "td critical-path"
+    timeout: 5m
+    on_success: implementation
+
+  - id: implementation
+    type: agent
+    prompt_template: |
+      Implement the feature from td issue {{issue.id}}
+      Title: {{issue.title}}
+      Description: {{issue.description}}
+      
+      Follow the coding standards and conventions in the codebase.
+      Write tests for new functionality.
+    timeout: 30m
+    validation:
+      - type: compile
+      - type: tests
+    on_success: review
+    on_failure: retry
+    max_retries: 2
+
+  - id: retry
+    type: decision
+    on_success: implementation
+
+  - id: review
+    type: action
+    command: "td review {{session.issue_id}}"
+    timeout: 5m
+    on_success: complete
+    on_failure: escalate
+
+  - id: complete
+    type: action
+    command: "td approve {{session.issue_id}}"
+
+  - id: escalate
+    type: action
+    command: "td escalate {{session.issue_id}} --reason 'Review failed'"
+
+entry_point: planning
