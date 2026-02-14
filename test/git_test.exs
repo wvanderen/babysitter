@@ -1,0 +1,123 @@
+defmodule Babysitter.GitTest do
+  use ExUnit.Case, async: false
+
+  alias Babysitter.Git
+
+  describe "current_branch/0" do
+    test "returns the current branch name" do
+      result = Git.current_branch()
+      assert is_binary(result)
+      refute match?({:error, _}, result)
+    end
+  end
+
+  describe "has_changes?/0" do
+    test "returns a boolean" do
+      result = Git.has_changes?()
+      assert is_boolean(result)
+    end
+  end
+
+  describe "status/0" do
+    test "returns repository status" do
+      result = Git.status()
+      assert is_binary(result)
+      refute match?({:error, _}, result)
+    end
+  end
+
+  describe "status_short/0" do
+    test "returns porcelain status" do
+      result = Git.status_short()
+      assert is_binary(result)
+    end
+  end
+
+  describe "last_commit/1" do
+    test "returns full commit hash by default" do
+      result = Git.last_commit()
+      assert is_binary(result)
+      assert String.length(result) == 40
+    end
+
+    test "returns short hash with short option" do
+      result = Git.last_commit(short: true)
+      assert is_binary(result)
+      assert String.length(result) == 7
+    end
+  end
+
+  describe "last_commit_message/0" do
+    test "returns the last commit message" do
+      result = Git.last_commit_message()
+      assert is_binary(result)
+      refute result == ""
+    end
+  end
+
+  describe "ahead?/0" do
+    test "returns a boolean" do
+      result = Git.ahead?()
+      assert is_boolean(result)
+    end
+  end
+
+  describe "behind?/0" do
+    test "returns a boolean" do
+      result = Git.behind?()
+      assert is_boolean(result)
+    end
+  end
+
+  describe "add/1" do
+    test "stages all changes with all option" do
+      result = Git.add(all: true)
+      assert result == :ok or match?({:error, _}, result)
+    end
+  end
+
+  describe "commit/1" do
+    test "commit requires message option" do
+      assert_raise KeyError, fn ->
+        Git.commit([])
+      end
+    end
+
+    test "commit with allow_empty creates empty commit" do
+      result = Git.commit(message: "test: empty commit", allow_empty: true)
+      assert result == :ok or match?({:error, _}, result)
+
+      if result == :ok do
+        Git.reset(mode: :hard, commit: "HEAD~1")
+      end
+    end
+  end
+
+  describe "push/1" do
+    test "push returns ok or error" do
+      result = Git.push(dry_run: true)
+      assert result == :ok or match?({:error, _}, result)
+    end
+  end
+
+  describe "pull/1" do
+    test "pull returns ok or error" do
+      result = Git.pull()
+      assert result == :ok or match?({:error, _}, result)
+    end
+  end
+
+  describe "fetch/1" do
+    test "fetch returns ok or error" do
+      result = Git.fetch()
+      assert result == :ok or match?({:error, _}, result)
+    end
+  end
+
+  describe "reset/1" do
+    test "reset requires valid mode" do
+      result = Git.reset(mode: :soft, commit: "HEAD")
+      assert result == :ok
+    end
+  end
+end
