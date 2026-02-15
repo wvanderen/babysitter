@@ -5,6 +5,12 @@ defmodule BabysitterWeb.Endpoint do
 
   socket("/socket", BabysitterWeb.UserSocket, websocket: [timeout: 45_000])
 
+  plug(Plug.Parsers,
+    parsers: [:urlencoded, :multipart, :json],
+    pass: ["*/*"],
+    json_decoder: Jason
+  )
+
   plug(Plug.Static,
     at: "/",
     from: :babysitter,

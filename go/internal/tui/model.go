@@ -6,6 +6,7 @@ import (
 	"os/exec"
 
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/marcus/babysitter/go/internal/client"
@@ -19,35 +20,48 @@ const (
 	FocusControls
 )
 
+type ViewState int
+
+const (
+	ViewNormal ViewState = iota
+	ViewWorkflowSelect
+	ViewNewSession
+)
+
 var (
 	appStyle = lipgloss.NewStyle().Padding(1, 2)
 )
 
 type AppModel struct {
-	sessionsList SessionList
-	outputViewer OutputViewer
-	controls     Controls
-	focus        FocusArea
-	client       *client.Client
-	wsClient     *client.WSClient
-	sessions     []client.Session
-	currentIndex int
-	connected    bool
-	quitting     bool
-	err          error
+	sessionsList   SessionList
+	outputViewer   OutputViewer
+	controls       Controls
+	workflowSelect WorkflowSelect
+	newSession     *NewSession
+	focus          FocusArea
+	viewState      ViewState
+	client         *client.Client
+	wsClient       *client.WSClient
+	sessions       []client.Session
+	currentIndex   int
+	connected      bool
+	quitting       bool
+	err            error
 }
 
 func NewAppModel(apiClient *client.Client) AppModel {
 	return AppModel{
-		sessionsList: NewSessionList(),
-		outputViewer: NewOutputViewer(),
-		controls:     NewControls(),
-		focus:        FocusSessions,
-		client:       apiClient,
-		sessions:     []client.Session{},
-		currentIndex: 0,
-		connected:    false,
-		quitting:     false,
+		sessionsList:   NewSessionList(),
+		outputViewer:   NewOutputViewer(),
+		controls:       NewControls(),
+		workflowSelect: NewWorkflowSelect(),
+		focus:          FocusSessions,
+		viewState:      ViewNormal,
+		client:         apiClient,
+		sessions:       []client.Session{},
+		currentIndex:   0,
+		connected:      false,
+		quitting:       false,
 	}
 }
 
@@ -82,10 +96,29 @@ func (m AppModel) fetchSessions() tea.Cmd {
 	}
 }
 
+func (m AppModel) fetchWorkflows() tea.Cmd {
+	return func() tea.Msg {
+		if m.client == nil {
+			return WorkflowSelectMsg{Workflows: []client.Workflow{}}
+		}
+		result, err := m.client.ListWorkflows()
+		if err != nil {
+			return errMsg{err}
+		}
+		return WorkflowSelectMsg{Workflows: result.Workflows}
+	}
+}
+
 type errMsg struct{ error }
 
 type FocusMsg struct {
 	Area FocusArea
+}
+
+type ExecuteWorkflowMsg struct {
+	WorkflowID string
+	IssueID    string
+	Variables  map[string]interface{}
 }
 
 func (e errMsg) Error() string { return e.error.Error() }
@@ -103,6 +136,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.cycleFocus()
 		case "shift+tab":
 			m.cycleFocusBack()
+		case "n":
+			if m.viewState == ViewNormal {
+				m.viewState = ViewWorkflowSelect
+				return m, m.fetchWorkflows()
+			}
 		}
 
 	case tea.WindowSizeMsg:
@@ -131,6 +169,32 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ControlMsg:
 		cmds = append(cmds, m.handleControlAction(msg))
+
+	case WorkflowSelectedMsg:
+		m.viewState = ViewNewSession
+		m.newSession = &NewSession{
+			workflowID:   msg.Workflow.ID,
+			workflowName: msg.Workflow.Name,
+			issueID:      textinput.New(),
+		}
+		m.newSession.issueID.Placeholder = "td-123"
+		m.newSession.issueID.Focus()
+		m.newSession.issueID.Prompt = "Issue ID: "
+
+	case CancelWorkflowSelectMsg:
+		m.viewState = ViewNormal
+
+	case ExecuteWorkflowMsg:
+		return m.handleExecuteWorkflow(msg)
+
+	case NewSessionStartedMsg:
+		m.viewState = ViewNormal
+		m.newSession = nil
+		cmds = append(cmds, m.fetchSessions())
+
+	case NewSessionCanceledMsg:
+		m.viewState = ViewNormal
+		m.newSession = nil
 	}
 
 	var cmd tea.Cmd
@@ -142,6 +206,17 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	m.controls, cmd = m.controls.Update(msg)
 	cmds = append(cmds, cmd)
+
+	if m.viewState == ViewWorkflowSelect {
+		m.workflowSelect, cmd = m.workflowSelect.Update(msg)
+		cmds = append(cmds, cmd)
+	}
+
+	if m.viewState == ViewNewSession && m.newSession != nil {
+		updatedNewSession, cmd := m.newSession.Update(msg)
+		m.newSession = &updatedNewSession
+		cmds = append(cmds, cmd)
+	}
 
 	if selected := m.sessionsList.SelectedSession(); selected != nil {
 		m.controls.SetSession(selected)
@@ -194,6 +269,30 @@ func (m AppModel) View() string {
 		return "Goodbye!\n"
 	}
 
+	switch m.viewState {
+	case ViewWorkflowSelect:
+		header := lipgloss.NewStyle().Bold(true).Render("BABYSITTER TUI") + "  " +
+			helpStyle.Render("[Enter] Select  [Esc] Cancel  [q] Quit")
+		return appStyle.Render(
+			lipgloss.JoinVertical(lipgloss.Left,
+				header,
+				"",
+				m.workflowSelect.View(),
+			),
+		)
+
+	case ViewNewSession:
+		header := lipgloss.NewStyle().Bold(true).Render("BABYSITTER TUI") + "  " +
+			helpStyle.Render("[Enter] Start  [Esc] Cancel  [q] Quit")
+		return appStyle.Render(
+			lipgloss.JoinVertical(lipgloss.Left,
+				header,
+				"",
+				m.newSession.View(),
+			),
+		)
+	}
+
 	var errView string
 	if m.err != nil {
 		errView = lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Render(
@@ -217,7 +316,7 @@ func (m AppModel) View() string {
 	}
 
 	header := lipgloss.NewStyle().Bold(true).Render("BABYSITTER TUI") + "  " +
-		helpStyle.Render("[Tab] Switch focus  [q] Quit")
+		helpStyle.Render("[Tab] Switch focus  [n] New session  [q] Quit")
 
 	focusBar := helpStyle.Render(focusIndicator)
 
@@ -312,4 +411,25 @@ func (m *AppModel) handleControlAction(msg ControlMsg) tea.Cmd {
 	}
 
 	return nil
+}
+
+func (m *AppModel) handleExecuteWorkflow(msg ExecuteWorkflowMsg) (tea.Model, tea.Cmd) {
+	if m.client == nil {
+		m.err = fmt.Errorf("no client connected")
+		m.viewState = ViewNormal
+		m.newSession = nil
+		return m, nil
+	}
+
+	return m, func() tea.Msg {
+		result, err := m.client.ExecuteWorkflowWithParams(msg.WorkflowID, msg.IssueID, msg.Variables)
+		if err != nil {
+			return errMsg{fmt.Errorf("failed to start workflow: %w", err)}
+		}
+		return NewSessionStartedMsg{
+			SessionID:  result.SessionID,
+			InstanceID: result.InstanceID,
+			WorkflowID: result.WorkflowID,
+		}
+	}
 }

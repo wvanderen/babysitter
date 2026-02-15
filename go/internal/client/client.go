@@ -225,8 +225,30 @@ func (c *Client) CreateWorkflow(name string, stages []Stage) (*Workflow, error) 
 	return &result.Workflow, nil
 }
 
+type WorkflowExecution struct {
+	InstanceID string `json:"instance_id"`
+	SessionID  string `json:"session_id"`
+	WorkflowID string `json:"workflow_id"`
+	Status     string `json:"status"`
+}
+
 func (c *Client) ExecuteWorkflow(workflowID string) error {
 	return c.doRequest("POST", "/api/workflows/"+workflowID+"/execute", nil, nil)
+}
+
+func (c *Client) ExecuteWorkflowWithParams(workflowID, issueID string, variables map[string]interface{}) (*WorkflowExecution, error) {
+	body := map[string]interface{}{}
+	if issueID != "" {
+		body["issue_id"] = issueID
+	}
+	if len(variables) > 0 {
+		body["variables"] = variables
+	}
+	var result WorkflowExecution
+	if err := c.doRequest("POST", "/api/workflows/"+workflowID+"/execute", body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 type WSMessage struct {
