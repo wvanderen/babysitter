@@ -18,6 +18,7 @@ defmodule Babysitter.Application do
       Babysitter.TD.Repo,
       Babysitter.State.Repo,
       Babysitter.WorkflowStore,
+      Babysitter.WorkflowLoader,
       {Registry, keys: :unique, name: Babysitter.SessionRegistry},
       {Registry, keys: :unique, name: Babysitter.OutputCaptureRegistry},
       {Registry, keys: :unique, name: Babysitter.WorkflowRegistry},
