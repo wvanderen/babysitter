@@ -231,6 +231,34 @@ type WorkflowExecution struct {
 	Status     string `json:"status"`
 }
 
+type WorkflowInstance struct {
+	ID               string                 `json:"id"`
+	WorkflowID       string                 `json:"workflow_id"`
+	SessionID        string                 `json:"session_id"`
+	Status           string                 `json:"status"`
+	CurrentStage     string                 `json:"current_stage"`
+	StartedAt        string                 `json:"started_at"`
+	CompletedAt      string                 `json:"completed_at"`
+	FailureReason    string                 `json:"failure_reason"`
+	EscalationReason string                 `json:"escalation_reason"`
+	RetryCount       int                    `json:"retry_count"`
+	MaxRetries       int                    `json:"max_retries"`
+	ExecutionHistory []ExecutionHistoryItem `json:"execution_history"`
+	Variables        map[string]interface{} `json:"variables"`
+}
+
+type ExecutionHistoryItem struct {
+	StageID     string                 `json:"stage_id"`
+	StageType   string                 `json:"stage_type"`
+	Status      string                 `json:"status"`
+	StartedAt   string                 `json:"started_at"`
+	CompletedAt string                 `json:"completed_at"`
+	Output      string                 `json:"output"`
+	Error       string                 `json:"error"`
+	DurationMs  int64                  `json:"duration_ms"`
+	Metadata    map[string]interface{} `json:"metadata"`
+}
+
 func (c *Client) ExecuteWorkflow(workflowID string) error {
 	return c.doRequest("POST", "/api/workflows/"+workflowID+"/execute", nil, nil)
 }
@@ -250,6 +278,28 @@ func (c *Client) ExecuteWorkflowWithParams(workflowID, issueID string, variables
 	return &result, nil
 }
 
+func (c *Client) GetWorkflowInstance(workflowID, instanceID string) (*WorkflowInstance, error) {
+	var result struct {
+		Instance WorkflowInstance `json:"instance"`
+	}
+	path := fmt.Sprintf("/api/workflows/%s/instances/%s", workflowID, instanceID)
+	if err := c.doRequest("GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result.Instance, nil
+}
+
+func (c *Client) GetInstanceHistory(workflowID, instanceID string) ([]ExecutionHistoryItem, error) {
+	var result struct {
+		History []ExecutionHistoryItem `json:"history"`
+	}
+	path := fmt.Sprintf("/api/workflows/%s/instances/%s/history", workflowID, instanceID)
+	if err := c.doRequest("GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return result.History, nil
+}
+
 type WSMessage struct {
 	Event     string                 `json:"event"`
 	SessionID string                 `json:"session_id,omitempty"`
@@ -258,6 +308,26 @@ type WSMessage struct {
 	Output    string                 `json:"output,omitempty"`
 	Status    string                 `json:"status,omitempty"`
 	Data      map[string]interface{} `json:"data,omitempty"`
+	Payload   *WSPayload             `json:"payload,omitempty"`
+}
+
+type WSPayload struct {
+	SessionID      string                 `json:"session_id,omitempty"`
+	Timestamp      string                 `json:"timestamp,omitempty"`
+	StageID        string                 `json:"stage_id,omitempty"`
+	From           string                 `json:"from,omitempty"`
+	To             string                 `json:"to,omitempty"`
+	Reason         string                 `json:"reason,omitempty"`
+	Type           string                 `json:"type,omitempty"`
+	Prompt         string                 `json:"prompt,omitempty"`
+	Command        string                 `json:"command,omitempty"`
+	Output         string                 `json:"output,omitempty"`
+	Error          string                 `json:"error,omitempty"`
+	DurationMs     int64                  `json:"duration_ms,omitempty"`
+	CurrentStage   string                 `json:"current_stage,omitempty"`
+	CompletedCount int                    `json:"completed_count,omitempty"`
+	TotalStages    int                    `json:"total_stages,omitempty"`
+	Metadata       map[string]interface{} `json:"metadata,omitempty"`
 }
 
 type WSClient struct {
