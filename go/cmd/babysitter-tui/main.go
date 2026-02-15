@@ -12,27 +12,52 @@ import (
 
 var (
 	defaultAPIURL = "http://localhost:4001"
+	version       = "dev"
 )
 
 func main() {
-	apiURL := flag.String("api", defaultAPIURL, "Daemon API URL")
+	var (
+		apiURL      = flag.String("api", defaultAPIURL, "Daemon API URL")
+		wsURL       = flag.String("ws", "", "WebSocket URL (defaults to ws://<api-host>/ws)")
+		sessionID   = flag.String("session", "", "Session ID to select on start")
+		connect     = flag.Bool("connect", false, "Auto-connect to WebSocket on start")
+		showVer     = flag.Bool("version", false, "Show version and exit")
+		noAltScreen = flag.Bool("no-alt-screen", false, "Disable alternate screen buffer")
+	)
 	flag.Parse()
 
-	bp := sidecar.New()
-	ctx := &plugin.Context{
-		Config: map[string]interface{}{
-			"daemon_url": *apiURL,
-		},
+	if *showVer {
+		fmt.Printf("babysitter-tui %s\n", version)
+		os.Exit(0)
 	}
+
+	config := map[string]interface{}{
+		"daemon_url": *apiURL,
+	}
+	if *wsURL != "" {
+		config["ws_url"] = *wsURL
+	}
+	if *sessionID != "" {
+		config["session_id"] = *sessionID
+	}
+	if *connect {
+		config["auto_connect"] = true
+	}
+
+	bp := sidecar.New()
+	ctx := &plugin.Context{Config: config}
 
 	if err := bp.Init(ctx); err != nil {
 		fmt.Fprintf(os.Stderr, "Init error: %v\n", err)
 		os.Exit(1)
 	}
 
-	p := tea.NewProgram(pluginAdapter{bp},
-		tea.WithAltScreen(),
-	)
+	opts := []tea.ProgramOption{tea.WithAltScreen()}
+	if *noAltScreen {
+		opts = []tea.ProgramOption{}
+	}
+
+	p := tea.NewProgram(pluginAdapter{bp}, opts...)
 
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
