@@ -1,0 +1,79 @@
+id: demo-orchestration
+name: Demo Orchestration
+description: Comprehensive workflow demonstrating all orchestration features
+intelligence: hybrid
+
+stages:
+  - id: setup
+    type: action
+    command: "echo 'Starting demo workflow' && mkdir -p /tmp/babysitter-demo"
+    timeout: 1m
+    on_success: fetch_data
+    on_failure: cleanup
+
+  - id: fetch_data
+    type: action
+    command: "curl -s https://httpbin.org/json > /tmp/babysitter-demo/data.json || echo 'FALLBACK'"
+    timeout: 30s
+    validation:
+      - type: file_exists
+        path: /tmp/babysitter-demo/data.json
+      - type: output_contains
+        pattern: "slideshow"
+    on_success: process_data
+    on_failure: retry_fetch
+
+  - id: retry_fetch
+    type: decision
+    on_success: fetch_data
+
+  - id: process_data
+    type: agent
+    prompt_template: |
+      Analyze the JSON data in /tmp/babysitter-demo/data.json
+      Create a summary report at /tmp/babysitter-demo/summary.txt
+      Include the slideshow title and author information.
+    timeout: 5m
+    max_retries: 2
+    validation:
+      - type: file_exists
+        path: /tmp/babysitter-demo/summary.txt
+      - type: output_contains
+        pattern: "title"
+    on_success: validate_results
+    on_failure: handle_processing_error
+
+  - id: handle_processing_error
+    type: action
+    command: "echo 'Processing failed, attempting recovery'"
+    on_success: process_data
+
+  - id: validate_results
+    type: action
+    command: "test -s /tmp/babysitter-demo/summary.txt && echo 'VALIDATION_PASSED'"
+    timeout: 30s
+    validation:
+      - type: output_contains
+        pattern: "VALIDATION_PASSED"
+    on_success: notify_success
+    on_failure: escalate
+
+  - id: notify_success
+    type: action
+    command: "echo 'Demo workflow completed successfully' > /tmp/babysitter-demo/result.txt"
+    on_success: complete
+
+  - id: cleanup
+    type: action
+    command: "rm -rf /tmp/babysitter-demo && echo 'Cleaned up failed run'"
+
+  - id: escalate
+    type: action
+    command: "echo 'ESCALATION: Validation failed after retries' && exit 1"
+    on_failure: cleanup
+
+  - id: complete
+    type: action
+    command: "cat /tmp/babysitter-demo/result.txt"
+
+entry_point: setup
