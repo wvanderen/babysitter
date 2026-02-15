@@ -7,6 +7,10 @@ defmodule BabysitterWeb.SessionChannel do
   - session:output - output lines from the agent
   - session:stage - stage execution events
   - session:status - status changes (running, paused, stopped)
+  - stage:started - when a stage begins (stage_id, type, prompt/command)
+  - stage:completed - after execution (status, output, error, duration_ms)
+  - stage:transition - when moving between stages (from, to, reason)
+  - workflow:progress - summary update (current_stage, completed_count, total_stages, status)
   """
 
   use Phoenix.Channel

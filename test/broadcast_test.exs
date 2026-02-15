@@ -104,6 +104,122 @@ defmodule Babysitter.BroadcastTest do
     end
   end
 
+  describe "stage_started/3" do
+    test "broadcasts stage:started event with metadata", %{session_id: session_id} do
+      Broadcast.subscribe(session_id)
+
+      :ok =
+        Broadcast.stage_started(session_id, :analyze, %{
+          type: :prompt,
+          prompt: "Read the codebase"
+        })
+
+      assert_receive %{event: "stage:started", payload: payload}
+      assert payload.session_id == session_id
+      assert payload.stage_id == :analyze
+      assert payload.type == :prompt
+      assert payload.prompt == "Read the codebase"
+      assert payload.timestamp != nil
+    end
+
+    test "broadcasts stage:started event for command stage", %{session_id: session_id} do
+      Broadcast.subscribe(session_id)
+
+      :ok =
+        Broadcast.stage_started(session_id, :build, %{
+          type: :command,
+          command: "mix compile"
+        })
+
+      assert_receive %{event: "stage:started", payload: payload}
+      assert payload.stage_id == :build
+      assert payload.type == :command
+      assert payload.command == "mix compile"
+    end
+  end
+
+  describe "stage_completed/4" do
+    test "broadcasts stage:completed event on success", %{session_id: session_id} do
+      Broadcast.subscribe(session_id)
+
+      :ok =
+        Broadcast.stage_completed(session_id, :analyze, :success, %{
+          output: "Analysis complete",
+          duration_ms: 1500
+        })
+
+      assert_receive %{event: "stage:completed", payload: payload}
+      assert payload.session_id == session_id
+      assert payload.stage_id == :analyze
+      assert payload.status == :success
+      assert payload.output == "Analysis complete"
+      assert payload.duration_ms == 1500
+      assert payload.error == nil
+    end
+
+    test "broadcasts stage:completed event on failure", %{session_id: session_id} do
+      Broadcast.subscribe(session_id)
+
+      :ok =
+        Broadcast.stage_completed(session_id, :test, :failure, %{
+          error: "Tests failed",
+          duration_ms: 500
+        })
+
+      assert_receive %{event: "stage:completed", payload: payload}
+      assert payload.status == :failure
+      assert payload.error == "Tests failed"
+    end
+  end
+
+  describe "stage_transition/4" do
+    test "broadcasts stage:transition event", %{session_id: session_id} do
+      Broadcast.subscribe(session_id)
+
+      :ok = Broadcast.stage_transition(session_id, :analyze, :implement, "success")
+
+      assert_receive %{event: "stage:transition", payload: payload}
+      assert payload.session_id == session_id
+      assert payload.from == :analyze
+      assert payload.to == :implement
+      assert payload.reason == "success"
+      assert payload.timestamp != nil
+    end
+
+    test "broadcasts stage:transition to completion", %{session_id: session_id} do
+      Broadcast.subscribe(session_id)
+
+      :ok = Broadcast.stage_transition(session_id, :review, nil, "complete")
+
+      assert_receive %{event: "stage:transition", payload: payload}
+      assert payload.from == :review
+      assert payload.to == nil
+      assert payload.reason == "complete"
+    end
+  end
+
+  describe "workflow_progress/2" do
+    test "broadcasts workflow:progress event", %{session_id: session_id} do
+      Broadcast.subscribe(session_id)
+
+      :ok =
+        Broadcast.workflow_progress(session_id, %{
+          current_stage: :implement,
+          completed_count: 2,
+          total_stages: 5,
+          status: :running
+        })
+
+      assert_receive %{event: "workflow:progress", payload: payload}
+      assert payload.session_id == session_id
+      assert payload.current_stage == :implement
+      assert payload.completed_count == 2
+      assert payload.total_stages == 5
+      assert payload.status == :running
+      assert payload.timestamp != nil
+    end
+  end
+
   describe "multiple subscribers" do
     test "all subscribers receive events", %{session_id: session_id} do
       parent = self()

@@ -20,7 +20,7 @@ defmodule Babysitter.WorkflowInstance do
 
   use GenServer
 
-  alias Babysitter.{StageExecutor, TransitionEngine, WorkflowStore}
+  alias Babysitter.{Broadcast, StageExecutor, TransitionEngine, WorkflowStore}
 
   @type status :: :pending | :running | :paused | :completed | :failed | :escalated | :stopped
   @type instance_id :: String.t()
@@ -346,9 +346,24 @@ defmodule Babysitter.WorkflowInstance do
          stage when not is_nil(stage) <- Map.get(workflow.stages, state.current_stage),
          true <- state.session_id != nil do
       started_at = DateTime.utc_now()
+      stage_id = state.current_stage
+
+      Broadcast.stage_started(state.session_id, stage_id, %{
+        type: stage.type,
+        prompt: Map.get(stage, :prompt),
+        command: Map.get(stage, :command)
+      })
 
       case StageExecutor.execute(stage, state.session_id, build_executor_opts(state)) do
         {:ok, result} ->
+          duration_ms = DateTime.diff(result.finished_at, started_at, :millisecond)
+
+          Broadcast.stage_completed(state.session_id, stage_id, result.status, %{
+            output: result.output,
+            error: result.error,
+            duration_ms: duration_ms
+          })
+
           entry = %{
             stage_id: state.current_stage,
             status: result.status,
@@ -362,6 +377,11 @@ defmodule Babysitter.WorkflowInstance do
           {:ok, result, new_state}
 
         {:error, reason} ->
+          Broadcast.stage_completed(state.session_id, stage_id, :failure, %{
+            error: inspect(reason),
+            duration_ms: DateTime.diff(DateTime.utc_now(), started_at, :millisecond)
+          })
+
           {:error, reason, state}
       end
     else
@@ -384,14 +404,24 @@ defmodule Babysitter.WorkflowInstance do
   defp handle_stage_result(%StageExecutor.Result{status: :success} = result, state) do
     case TransitionEngine.next_stage(get_current_stage(state), result) do
       {:ok, :complete} ->
+        broadcast_progress(state, :completed)
         {:noreply, %{state | status: :completed, completed_at: DateTime.utc_now()}}
 
       {:ok, next_stage_id} when is_atom(next_stage_id) ->
+        Broadcast.stage_transition(
+          state.session_id,
+          state.current_stage,
+          next_stage_id,
+          "success"
+        )
+
         new_state = %{state | current_stage: next_stage_id, retry_count: 0}
+        broadcast_progress(new_state, :running)
         send(self(), :execute_current_stage)
         {:noreply, new_state}
 
       {:error, :no_transition_defined} ->
+        broadcast_progress(state, :completed)
         {:noreply, %{state | status: :completed, completed_at: DateTime.utc_now()}}
     end
   end
@@ -399,10 +429,19 @@ defmodule Babysitter.WorkflowInstance do
   defp handle_stage_result(%StageExecutor.Result{status: :failure} = result, state) do
     case TransitionEngine.next_stage(get_current_stage(state), result) do
       {:ok, :complete} ->
+        broadcast_progress(state, :completed)
         {:noreply, %{state | status: :completed, completed_at: DateTime.utc_now()}}
 
       {:ok, next_stage_id} when is_atom(next_stage_id) ->
+        Broadcast.stage_transition(
+          state.session_id,
+          state.current_stage,
+          next_stage_id,
+          "failure"
+        )
+
         new_state = %{state | current_stage: next_stage_id}
+        broadcast_progress(new_state, :running)
         send(self(), :execute_current_stage)
         {:noreply, new_state}
 
@@ -412,6 +451,8 @@ defmodule Babysitter.WorkflowInstance do
           send(self(), :execute_current_stage)
           {:noreply, new_state}
         else
+          broadcast_progress(state, :failed)
+
           {:noreply,
            %{
              state
@@ -425,14 +466,24 @@ defmodule Babysitter.WorkflowInstance do
   defp handle_stage_result(%StageExecutor.Result{status: :timeout} = result, state) do
     case TransitionEngine.next_stage(get_current_stage(state), result) do
       {:ok, :complete} ->
+        broadcast_progress(state, :completed)
         {:noreply, %{state | status: :completed, completed_at: DateTime.utc_now()}}
 
       {:ok, next_stage_id} when is_atom(next_stage_id) ->
+        Broadcast.stage_transition(
+          state.session_id,
+          state.current_stage,
+          next_stage_id,
+          "timeout"
+        )
+
         new_state = %{state | current_stage: next_stage_id}
+        broadcast_progress(new_state, :running)
         send(self(), :execute_current_stage)
         {:noreply, new_state}
 
       {:error, :no_transition_defined} ->
+        broadcast_progress(state, :failed)
         {:noreply, %{state | status: :failed, failure_reason: result.error || "Stage timed out"}}
     end
   end
@@ -444,6 +495,23 @@ defmodule Babysitter.WorkflowInstance do
       {:ok, workflow} -> Map.get(workflow.stages, stage_id)
       _ -> nil
     end
+  end
+
+  defp broadcast_progress(%__MODULE__{session_id: nil}, _status), do: :ok
+
+  defp broadcast_progress(%__MODULE__{} = state, status) do
+    total_stages =
+      case WorkflowStore.get(state.workflow_id) do
+        {:ok, workflow} -> length(workflow.stage_order || [])
+        _ -> 0
+      end
+
+    Broadcast.workflow_progress(state.session_id, %{
+      current_stage: state.current_stage,
+      completed_count: length(state.execution_history),
+      total_stages: total_stages,
+      status: status
+    })
   end
 
   defp validate_transition(from_status, to_status) do

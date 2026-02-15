@@ -76,6 +76,66 @@ defmodule Babysitter.Broadcast do
   end
 
   @doc """
+  Broadcast stage started event.
+  """
+  @spec stage_started(session_id(), atom(), map()) :: :ok
+  def stage_started(session_id, stage_id, metadata \\ %{}) do
+    broadcast(session_id, "stage:started", %{
+      session_id: session_id,
+      timestamp: DateTime.utc_now() |> DateTime.to_iso8601(),
+      stage_id: stage_id,
+      type: Map.get(metadata, :type),
+      prompt: Map.get(metadata, :prompt),
+      command: Map.get(metadata, :command)
+    })
+  end
+
+  @doc """
+  Broadcast stage completed event.
+  """
+  @spec stage_completed(session_id(), atom(), atom(), map()) :: :ok
+  def stage_completed(session_id, stage_id, status, result \\ %{}) do
+    broadcast(session_id, "stage:completed", %{
+      session_id: session_id,
+      timestamp: DateTime.utc_now() |> DateTime.to_iso8601(),
+      stage_id: stage_id,
+      status: status,
+      output: Map.get(result, :output),
+      error: Map.get(result, :error),
+      duration_ms: Map.get(result, :duration_ms)
+    })
+  end
+
+  @doc """
+  Broadcast stage transition event.
+  """
+  @spec stage_transition(session_id(), atom() | nil, atom() | nil, String.t() | nil) :: :ok
+  def stage_transition(session_id, from_stage, to_stage, reason \\ nil) do
+    broadcast(session_id, "stage:transition", %{
+      session_id: session_id,
+      timestamp: DateTime.utc_now() |> DateTime.to_iso8601(),
+      from: from_stage,
+      to: to_stage,
+      reason: reason
+    })
+  end
+
+  @doc """
+  Broadcast workflow progress event.
+  """
+  @spec workflow_progress(session_id(), map()) :: :ok
+  def workflow_progress(session_id, progress) do
+    broadcast(session_id, "workflow:progress", %{
+      session_id: session_id,
+      timestamp: DateTime.utc_now() |> DateTime.to_iso8601(),
+      current_stage: Map.get(progress, :current_stage),
+      completed_count: Map.get(progress, :completed_count),
+      total_stages: Map.get(progress, :total_stages),
+      status: Map.get(progress, :status)
+    })
+  end
+
+  @doc """
   Subscribe to all events for a session.
   """
   @spec subscribe(session_id()) :: :ok | {:error, term()}
