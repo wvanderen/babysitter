@@ -89,6 +89,46 @@ defmodule BabysitterWeb.WorkflowController do
     end
   end
 
+  def show_instance(conn, %{"workflow_id" => workflow_id, "instance_id" => instance_id}) do
+    with {:ok, _workflow} <- get_workflow(workflow_id),
+         {:ok, state} <- Babysitter.WorkflowSupervisor.get_state(instance_id) do
+      json(conn, %{
+        instance: %{
+          id: state.id,
+          workflow_id: state.workflow_id,
+          session_id: state.session_id,
+          status: state.status,
+          current_stage: state.current_stage,
+          started_at: state.started_at,
+          completed_at: state.completed_at,
+          failure_reason: state.failure_reason,
+          escalation_reason: state.escalation_reason,
+          retry_count: state.retry_count,
+          max_retries: state.max_retries,
+          execution_history: state.execution_history,
+          variables: state.variables
+        }
+      })
+    else
+      {:error, :not_found} ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{error: "Workflow or instance not found"})
+    end
+  end
+
+  def instance_history(conn, %{"workflow_id" => workflow_id, "instance_id" => instance_id}) do
+    with {:ok, _workflow} <- get_workflow(workflow_id),
+         {:ok, history} <- Babysitter.WorkflowSupervisor.get_history(instance_id) do
+      json(conn, %{history: history})
+    else
+      {:error, :not_found} ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{error: "Workflow or instance not found"})
+    end
+  end
+
   defp list_workflows do
     Babysitter.WorkflowStore.list()
   end

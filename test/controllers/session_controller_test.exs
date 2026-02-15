@@ -1,7 +1,7 @@
 defmodule BabysitterWeb.SessionControllerTest do
   use BabysitterWeb.ConnCase, async: false
 
-  alias Babysitter.SessionManager
+  alias Babysitter.{SessionManager, WorkflowStore, WorkflowSupervisor}
 
   setup do
     SessionManager.clear()
@@ -38,6 +38,49 @@ defmodule BabysitterWeb.SessionControllerTest do
       response = json_response(conn, 200)
 
       assert response["session"]["id"] == id
+    end
+
+    test "shows a session with workflow instance" do
+      session_id = unique_id("sess-wf-test")
+      {:ok, _} = SessionManager.create_session(session_id)
+
+      workflow = %{
+        id: "wf-session-test",
+        name: "Session Test Workflow",
+        stages: %{stage1: %{type: :action, command: "echo test"}},
+        stage_order: [:stage1],
+        entry_point: :stage1
+      }
+
+      WorkflowStore.put(workflow)
+
+      {:ok, instance_id} =
+        WorkflowSupervisor.start_workflow("wf-session-test",
+          session_id: session_id,
+          auto_start: false
+        )
+
+      conn = get(build_conn(), "/api/sessions/#{session_id}")
+      response = json_response(conn, 200)
+
+      assert response["session"]["id"] == session_id
+      assert response["session"]["workflow_instance"] != nil
+      assert response["session"]["workflow_instance"]["id"] == instance_id
+      assert response["session"]["workflow_instance"]["workflow_id"] == "wf-session-test"
+      assert response["session"]["workflow_instance"]["current_stage"] == nil
+
+      WorkflowSupervisor.stop_workflow(instance_id)
+    end
+
+    test "shows a session without workflow instance when none exists" do
+      id = unique_id("test-no-wf")
+      {:ok, _} = SessionManager.create_session(id)
+
+      conn = get(build_conn(), "/api/sessions/#{id}")
+      response = json_response(conn, 200)
+
+      assert response["session"]["id"] == id
+      assert response["session"]["workflow_instance"] == nil
     end
 
     test "returns 404 for nonexistent session" do

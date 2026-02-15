@@ -25,6 +25,8 @@ defmodule BabysitterWeb.Router do
 
     resources "/workflows", WorkflowController, only: [:index, :show, :create] do
       post("/execute", WorkflowController, :execute)
+      get("/instances/:instance_id", WorkflowController, :show_instance)
+      get("/instances/:instance_id/history", WorkflowController, :instance_history)
     end
   end
 end

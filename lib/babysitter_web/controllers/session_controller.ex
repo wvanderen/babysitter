@@ -11,7 +11,8 @@ defmodule BabysitterWeb.SessionController do
   def show(conn, %{"id" => id}) do
     case SessionManager.get_session(id) do
       {:ok, session} ->
-        json(conn, %{session: session})
+        response = Map.put(session_data(session), :workflow_instance, find_workflow_instance(id))
+        json(conn, %{session: response})
 
       {:error, :not_found} ->
         conn
@@ -148,5 +149,37 @@ defmodule BabysitterWeb.SessionController do
     else
       []
     end
+  end
+
+  defp session_data(session) do
+    %{
+      id: session.id,
+      status: session.status,
+      tmux_name: session.tmux_name,
+      started_at: session.started_at,
+      metadata: session.metadata,
+      failure_reason: session.failure_reason,
+      escalation_reason: session.escalation_reason,
+      validation_results: session.validation_results
+    }
+  end
+
+  defp find_workflow_instance(session_id) do
+    Babysitter.WorkflowSupervisor.list_workflows()
+    |> Enum.find_value(fn {instance_id, _pid, _status} ->
+      case Babysitter.WorkflowSupervisor.get_state(instance_id) do
+        {:ok, state} when state.session_id == session_id ->
+          %{
+            id: state.id,
+            workflow_id: state.workflow_id,
+            status: state.status,
+            current_stage: state.current_stage,
+            execution_history: state.execution_history
+          }
+
+        _ ->
+          nil
+      end
+    end)
   end
 end
