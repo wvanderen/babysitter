@@ -10,7 +10,7 @@ import (
 var (
 	controlStyle = lipgloss.NewStyle().
 			Padding(1, 2).
-			Border(lipgloss.NormalBorder(), false, false, true, false).
+			Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("62"))
 
 	buttonStyle = lipgloss.NewStyle().
@@ -73,6 +73,12 @@ func (c Controls) Update(msg tea.Msg) (Controls, tea.Cmd) {
 	case tea.KeyMsg:
 		if c.focused && c.session != nil {
 			switch msg.String() {
+			case "left":
+				c.PrevButton()
+			case "right":
+				c.NextButton()
+			case "enter":
+				return c, c.executeSelectedButton()
 			case "p":
 				return c, func() tea.Msg {
 					return ControlMsg{Action: ActionPause, SessionID: c.session.ID}
@@ -106,18 +112,53 @@ func (c Controls) Update(msg tea.Msg) (Controls, tea.Cmd) {
 	return c, cmd
 }
 
+func (c Controls) executeSelectedButton() tea.Cmd {
+	var action ControlAction
+	switch c.selected {
+	case 0:
+		action = ActionPause
+	case 1:
+		action = ActionResume
+	case 2:
+		action = ActionEscalate
+	case 3:
+		action = ActionSkip
+	case 4:
+		action = ActionAttach
+	case 5:
+		action = ActionRefresh
+	}
+	return func() tea.Msg {
+		return ControlMsg{Action: action, SessionID: c.session.ID}
+	}
+}
+
 func (c Controls) View() string {
+	borderColor := "62"
+	if !c.focused {
+		borderColor = "240"
+	}
+
+	activeBtnStyle := lipgloss.NewStyle().
+		Padding(0, 2).
+		Background(lipgloss.Color(borderColor)).
+		Foreground(lipgloss.Color("230"))
+
+	inactiveBtnStyle := lipgloss.NewStyle().
+		Padding(0, 2).
+		Foreground(lipgloss.Color("170"))
+
 	var buttons []string
 	for i, btn := range c.buttons {
 		if i == c.selected && c.focused {
-			buttons = append(buttons, buttonActiveStyle.Render(btn))
+			buttons = append(buttons, activeBtnStyle.Render(btn))
 		} else {
-			buttons = append(buttons, buttonStyle.Render(btn))
+			buttons = append(buttons, inactiveBtnStyle.Render(btn))
 		}
 	}
 
 	buttonRow := lipgloss.JoinHorizontal(lipgloss.Top, buttons...)
-	help := helpStyle.Render(c.helpText)
+	help := helpKeyStyle.Render(c.helpText)
 
 	var statusLine string
 	if c.session != nil {
@@ -128,7 +169,12 @@ func (c Controls) View() string {
 		statusLine = helpStyle.Render("No session selected")
 	}
 
-	return controlStyle.Render(
+	ctrlStyle := lipgloss.NewStyle().
+		Padding(1, 2).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color(borderColor))
+
+	return ctrlStyle.Render(
 		lipgloss.JoinVertical(lipgloss.Left,
 			buttonRow,
 			"",

@@ -6,7 +6,7 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/marcus/babysitter/go/internal/client"
+	"github.com/wvanderen/babysitter/go/internal/client"
 )
 
 var (

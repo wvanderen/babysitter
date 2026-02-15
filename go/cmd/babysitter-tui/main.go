@@ -6,12 +6,12 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/marcus/babysitter/go/internal/sidecar"
-	"github.com/marcus/babysitter/go/pkg/plugin"
+	"github.com/wvanderen/babysitter/go/internal/sidecar"
+	"github.com/wvanderen/babysitter/go/pkg/plugin"
 )
 
 var (
-	defaultAPIURL = "http://localhost:4001"
+	defaultAPIURL = "http://localhost:4000"
 	version       = "dev"
 )
 

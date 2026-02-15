@@ -1,4 +1,4 @@
-module github.com/marcus/babysitter/go
+module github.com/wvanderen/babysitter/go
 
 go 1.25.5
 

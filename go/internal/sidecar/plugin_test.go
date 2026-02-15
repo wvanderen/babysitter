@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/marcus/babysitter/go/internal/tui"
-	"github.com/marcus/babysitter/go/pkg/plugin"
+	"github.com/wvanderen/babysitter/go/internal/tui"
+	"github.com/wvanderen/babysitter/go/pkg/plugin"
 )
 
 func TestNew(t *testing.T) {
@@ -72,7 +72,6 @@ func TestCommands(t *testing.T) {
 		"babysitter.refresh",
 		"babysitter.focus.sessions",
 		"babysitter.focus.output",
-		"babysitter.focus.controls",
 	}
 
 	commandMap := make(map[string]bool)

@@ -5,11 +5,10 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/marcus/babysitter/go/internal/client"
+	"github.com/wvanderen/babysitter/go/internal/client"
 )
 
 type FocusArea int
@@ -17,7 +16,6 @@ type FocusArea int
 const (
 	FocusSessions FocusArea = iota
 	FocusOutput
-	FocusControls
 )
 
 type ViewState int
@@ -35,7 +33,6 @@ var (
 type AppModel struct {
 	sessionsList   SessionList
 	outputViewer   OutputViewer
-	controls       Controls
 	workflowSelect WorkflowSelect
 	newSession     *NewSession
 	focus          FocusArea
@@ -53,7 +50,6 @@ func NewAppModel(apiClient *client.Client) AppModel {
 	return AppModel{
 		sessionsList:   NewSessionList(),
 		outputViewer:   NewOutputViewer(),
-		controls:       NewControls(),
 		workflowSelect: NewWorkflowSelect(),
 		focus:          FocusSessions,
 		viewState:      ViewNormal,
@@ -67,9 +63,7 @@ func NewAppModel(apiClient *client.Client) AppModel {
 
 func (m AppModel) Init() tea.Cmd {
 	return tea.Batch(
-		m.sessionsList.Init(),
 		m.outputViewer.Init(),
-		m.controls.Init(),
 		m.fetchSessions(),
 	)
 }
@@ -86,10 +80,8 @@ func (m AppModel) fetchSessions() tea.Cmd {
 		items := make([]SessionItem, len(result.Sessions))
 		for i, s := range result.Sessions {
 			items[i] = SessionItem{
-				ID:      s.ID,
-				IssueID: s.IssueID,
-				Stage:   s.CurrentStage,
-				Status:  s.Status,
+				ID:     s.ID,
+				Status: s.Status,
 			}
 		}
 		return SessionListMsg{Sessions: items}
@@ -141,19 +133,62 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.viewState = ViewWorkflowSelect
 				return m, m.fetchWorkflows()
 			}
+		case "up":
+			if m.focus == FocusSessions && len(m.sessionsList.items) > 0 {
+				m.sessionsList.selected--
+				if m.sessionsList.selected < 0 {
+					m.sessionsList.selected = len(m.sessionsList.items) - 1
+				}
+			}
+		case "down":
+			if m.focus == FocusSessions && len(m.sessionsList.items) > 0 {
+				m.sessionsList.selected = (m.sessionsList.selected + 1) % len(m.sessionsList.items)
+			}
+		case "p":
+			if m.focus == FocusSessions {
+				if selected := m.sessionsList.SelectedSession(); selected != nil {
+					cmds = append(cmds, m.handleControlAction(ControlMsg{Action: ActionPause, SessionID: selected.ID}))
+				}
+			}
+		case "r":
+			if m.focus == FocusSessions {
+				if selected := m.sessionsList.SelectedSession(); selected != nil {
+					cmds = append(cmds, m.handleControlAction(ControlMsg{Action: ActionResume, SessionID: selected.ID}))
+				}
+			}
+		case "e":
+			if m.focus == FocusSessions {
+				if selected := m.sessionsList.SelectedSession(); selected != nil {
+					cmds = append(cmds, m.handleControlAction(ControlMsg{Action: ActionEscalate, SessionID: selected.ID}))
+				}
+			}
+		case "k":
+			if m.focus == FocusSessions {
+				if selected := m.sessionsList.SelectedSession(); selected != nil {
+					cmds = append(cmds, m.handleControlAction(ControlMsg{Action: ActionSkip, SessionID: selected.ID}))
+				}
+			}
+		case "a":
+			if m.focus == FocusSessions {
+				if selected := m.sessionsList.SelectedSession(); selected != nil {
+					cmds = append(cmds, m.handleControlAction(ControlMsg{Action: ActionAttach, SessionID: selected.ID}))
+				}
+			}
+		case "R":
+			if m.focus == FocusSessions {
+				if selected := m.sessionsList.SelectedSession(); selected != nil {
+					cmds = append(cmds, m.handleControlAction(ControlMsg{Action: ActionRefresh, SessionID: selected.ID}))
+				}
+			}
 		}
 
 	case tea.WindowSizeMsg:
 		h, v := appStyle.GetFrameSize()
-		m.sessionsList.SetSize(msg.Width/2-h, msg.Height-v-10)
-		m.outputViewer.SetSize(msg.Width/2-h, msg.Height-v-10)
+		m.sessionsList.SetSize(msg.Width-h, (msg.Height-v-20)/2)
+		m.outputViewer.SetSize(msg.Width-h, (msg.Height-v-20)/2)
 
 	case SessionListMsg:
-		sessions := make([]list.Item, len(msg.Sessions))
-		for i, s := range msg.Sessions {
-			sessions[i] = s
-		}
-		m.sessionsList.list.SetItems(sessions)
+		m.sessionsList.items = msg.Sessions
 
 	case errMsg:
 		m.err = msg
@@ -165,7 +200,6 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.focus = msg.Area
 		m.sessionsList.SetFocused(m.focus == FocusSessions)
 		m.outputViewer.SetFocused(m.focus == FocusOutput)
-		m.controls.SetFocused(m.focus == FocusControls)
 
 	case ControlMsg:
 		cmds = append(cmds, m.handleControlAction(msg))
@@ -196,16 +230,21 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case NewSessionCanceledMsg:
 		m.viewState = ViewNormal
 		m.newSession = nil
+
+	case ActionResult:
+		if msg.Success {
+			cmds = append(cmds, m.fetchSessions())
+		}
 	}
 
 	var cmd tea.Cmd
-	m.sessionsList, cmd = m.sessionsList.Update(msg)
-	cmds = append(cmds, cmd)
+	var err error
+	m.sessionsList, err = m.sessionsList.Update(msg)
+	if err != nil {
+		m.err = err
+	}
 
 	m.outputViewer, cmd = m.outputViewer.Update(msg)
-	cmds = append(cmds, cmd)
-
-	m.controls, cmd = m.controls.Update(msg)
 	cmds = append(cmds, cmd)
 
 	if m.viewState == ViewWorkflowSelect {
@@ -219,40 +258,30 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	}
 
-	if selected := m.sessionsList.SelectedSession(); selected != nil {
-		m.controls.SetSession(selected)
-	}
-
 	return m, tea.Batch(cmds...)
 }
 
 func (m *AppModel) cycleFocus() {
 	m.sessionsList.SetFocused(m.focus == FocusSessions)
 	m.outputViewer.SetFocused(m.focus == FocusOutput)
-	m.controls.SetFocused(m.focus == FocusControls)
 
 	switch m.focus {
 	case FocusSessions:
 		m.focus = FocusOutput
 	case FocusOutput:
-		m.focus = FocusControls
-	case FocusControls:
 		m.focus = FocusSessions
 	}
 
 	m.sessionsList.SetFocused(m.focus == FocusSessions)
 	m.outputViewer.SetFocused(m.focus == FocusOutput)
-	m.controls.SetFocused(m.focus == FocusControls)
 }
 
 func (m *AppModel) cycleFocusBack() {
 	switch m.focus {
 	case FocusSessions:
-		m.focus = FocusControls
+		m.focus = FocusOutput
 	case FocusOutput:
 		m.focus = FocusSessions
-	case FocusControls:
-		m.focus = FocusOutput
 	}
 }
 
@@ -300,26 +329,18 @@ func (m AppModel) View() string {
 			fmt.Sprintf("Error: %v", m.err))
 	}
 
-	leftPanel := m.sessionsList.View()
-	rightPanel := m.outputViewer.View()
-	controlsPanel := m.controls.View()
+	sessionsPanel := m.sessionsList.View()
+	outputPanel := m.outputViewer.View()
 
-	panels := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, rightPanel)
+	panels := lipgloss.JoinVertical(lipgloss.Left,
+		sessionsPanel,
+		"",
+		outputPanel,
+	)
 
-	var focusIndicator string
-	switch m.focus {
-	case FocusSessions:
-		focusIndicator = "[Sessions] Output  Controls"
-	case FocusOutput:
-		focusIndicator = "Sessions [Output]  Controls"
-	case FocusControls:
-		focusIndicator = "Sessions  Output  [Controls]"
-	}
+	header := lipgloss.NewStyle().Bold(true).Render("BABYSITTER TUI")
 
-	header := lipgloss.NewStyle().Bold(true).Render("BABYSITTER TUI") + "  " +
-		helpStyle.Render("[Tab] Switch focus  [n] New session  [q] Quit")
-
-	focusBar := helpStyle.Render(focusIndicator)
+	helpBar := helpKeyStyle.Render(m.sessionsList.HelpText())
 
 	return appStyle.Render(
 		lipgloss.JoinVertical(lipgloss.Left,
@@ -327,8 +348,7 @@ func (m AppModel) View() string {
 			"",
 			panels,
 			"",
-			focusBar,
-			controlsPanel,
+			helpBar,
 			errView,
 		),
 	)

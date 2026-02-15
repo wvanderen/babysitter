@@ -37,15 +37,14 @@ func New(baseURL string, opts ...ClientOption) *Client {
 }
 
 type Session struct {
-	ID           string                 `json:"id"`
-	WorkflowID   string                 `json:"workflow_id"`
-	IssueID      string                 `json:"issue_id"`
-	CurrentStage string                 `json:"current_stage"`
-	Status       string                 `json:"status"`
-	StartedAt    string                 `json:"started_at"`
-	TmuxSession  string                 `json:"tmux_session"`
-	Retries      map[string]int         `json:"retries"`
-	Context      map[string]interface{} `json:"context"`
+	ID                string                 `json:"id"`
+	Status            string                 `json:"status"`
+	TmuxName          string                 `json:"tmux_name"`
+	StartedAt         string                 `json:"started_at"`
+	Metadata          map[string]interface{} `json:"metadata"`
+	FailureReason     *string                `json:"failure_reason"`
+	EscalationReason  *string                `json:"escalation_reason"`
+	ValidationResults map[string]interface{} `json:"validation_results"`
 }
 
 type SessionList struct {
@@ -188,7 +187,7 @@ func (c *Client) AttachSession(id string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return session.TmuxSession, nil
+	return session.TmuxName, nil
 }
 
 func (c *Client) ListWorkflows() (*WorkflowList, error) {

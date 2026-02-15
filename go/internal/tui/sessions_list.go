@@ -3,20 +3,19 @@ package tui
 import (
 	"strings"
 
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
 var (
-	sessionStyle      = lipgloss.NewStyle().Padding(0, 2)
+	sessionTitleStyle = lipgloss.NewStyle().Background(lipgloss.Color("62")).Foreground(lipgloss.Color("230")).Padding(0, 1)
 	selectedStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("170")).Bold(true)
 	statusActiveStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
 	statusIdleStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
 	statusDoneStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("86"))
 	statusFailedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
-	titleStyle        = lipgloss.NewStyle().Background(lipgloss.Color("62")).Foreground(lipgloss.Color("230")).Padding(0, 1)
 	helpStyle         = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	tableHeaderStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Bold(true)
+	tableCellStyle    = lipgloss.NewStyle()
 )
 
 type SessionItem struct {
@@ -27,68 +26,112 @@ type SessionItem struct {
 	Duration string
 }
 
+func (s SessionItem) Title() string {
+	return s.ID
+}
+
+func (s SessionItem) Description() string {
+	return FormatStatus(s.Status)
+}
+
 func (s SessionItem) FilterValue() string {
 	return s.ID + " " + s.IssueID
 }
 
 type SessionList struct {
-	list     list.Model
+	items    []SessionItem
 	selected int
 	focused  bool
+	width    int
+	height   int
 }
 
 func NewSessionList() SessionList {
-	delegate := list.NewDefaultDelegate()
-	delegate.SetHeight(1)
-	delegate.SetSpacing(0)
-
-	l := list.New([]list.Item{}, delegate, 40, 20)
-	l.SetShowTitle(true)
-	l.Title = "Sessions"
-	l.SetShowStatusBar(false)
-	l.SetFilteringEnabled(true)
-	l.Styles.Title = titleStyle
-
 	return SessionList{
-		list:    l,
-		focused: true,
+		items:    []SessionItem{},
+		selected: 0,
+		focused:  true,
+		width:    80,
+		height:   20,
 	}
-}
-
-func (s SessionList) Init() tea.Cmd {
-	return nil
 }
 
 type SessionListMsg struct {
 	Sessions []SessionItem
 }
 
-func (s SessionList) Update(msg tea.Msg) (SessionList, tea.Cmd) {
-	var cmd tea.Cmd
-
+func (s SessionList) Update(msg interface{}) (SessionList, error) {
 	switch msg := msg.(type) {
 	case SessionListMsg:
-		items := make([]list.Item, len(msg.Sessions))
-		for i, sess := range msg.Sessions {
-			items[i] = sess
+		s.items = msg.Sessions
+		if s.selected >= len(s.items) {
+			s.selected = 0
 		}
-		s.list.SetItems(items)
 	}
-
-	if s.focused {
-		s.list, cmd = s.list.Update(msg)
-	}
-
-	return s, cmd
+	return s, nil
 }
 
 func (s SessionList) View() string {
-	return s.list.View()
+	borderColor := "62"
+	if !s.focused {
+		borderColor = "240"
+	}
+	boxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color(borderColor)).
+		Padding(0, 1)
+
+	headerRow := tableHeaderStyle.Render("ID") + strings.Repeat(" ", 20) +
+		tableHeaderStyle.Render("STATUS") + strings.Repeat(" ", 15) +
+		tableHeaderStyle.Render("STARTED")
+
+	if s.width < 10 {
+		s.width = 80
+	}
+
+	var rows []string
+	rows = append(rows, headerRow)
+	rows = append(rows, strings.Repeat("─", max(0, s.width-2)))
+
+	for i, item := range s.items {
+		idCell := item.ID
+		if len(idCell) > 20 {
+			idCell = idCell[:17] + "..."
+		}
+		idCell = idCell + strings.Repeat(" ", max(0, 20-len(idCell)))
+
+		statusCell := FormatStatus(item.Status)
+		statusWidth := lipgloss.Width(statusCell)
+		if statusWidth < 15 {
+			statusCell = statusCell + strings.Repeat(" ", 15-statusWidth)
+		}
+
+		startedCell := item.Duration
+		if startedCell == "" {
+			startedCell = "-"
+		}
+
+		rowStyle := tableCellStyle
+		if i == s.selected && s.focused {
+			rowStyle = selectedStyle
+		}
+
+		row := rowStyle.Render(idCell) + rowStyle.Render(statusCell) + rowStyle.Render(startedCell)
+		rows = append(rows, row)
+	}
+
+	for len(rows) < s.height-2 {
+		rows = append(rows, strings.Repeat(" ", max(0, s.width-2)))
+	}
+
+	content := strings.Join(rows, "\n")
+
+	return boxStyle.Render(content)
 }
 
 func (s SessionList) SelectedSession() *SessionItem {
-	if item, ok := s.list.SelectedItem().(SessionItem); ok {
-		return &item
+	if s.selected >= 0 && s.selected < len(s.items) {
+		return &s.items[s.selected]
 	}
 	return nil
 }
@@ -98,7 +141,18 @@ func (s *SessionList) SetFocused(focused bool) {
 }
 
 func (s *SessionList) SetSize(width, height int) {
-	s.list.SetSize(width, height)
+	s.width = width
+	s.height = height
+}
+
+func (s SessionList) HelpText() string {
+	if s.focused {
+		if s.selected >= 0 && s.selected < len(s.items) {
+			return "[↑/↓] Select  [Enter] Output  [p] Pause  [r] Resume  [e] Escalate  [k] Skip  [a] Attach  [R] Refresh  [n] New  [q] Quit"
+		}
+		return "[↑/↓] Select  [n] New session  [q] Quit"
+	}
+	return "[Tab] Focus"
 }
 
 func FormatStatus(status string) string {

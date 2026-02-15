@@ -50,16 +50,12 @@ func TestSessionItemFilterValue(t *testing.T) {
 func TestNewSessionList(t *testing.T) {
 	sl := NewSessionList()
 
-	if sl.list.Title != "Sessions" {
-		t.Errorf("Expected title 'Sessions', got %q", sl.list.Title)
-	}
-
 	if !sl.focused {
 		t.Error("Expected session list to be focused initially")
 	}
 
-	if sl.list.FilteringEnabled() != true {
-		t.Error("Expected filtering to be enabled")
+	if len(sl.items) != 0 {
+		t.Error("Expected empty items initially")
 	}
 }
 

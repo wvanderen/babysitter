@@ -2,9 +2,9 @@ package sidecar
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/marcus/babysitter/go/internal/client"
-	"github.com/marcus/babysitter/go/internal/tui"
-	"github.com/marcus/babysitter/go/pkg/plugin"
+	"github.com/wvanderen/babysitter/go/internal/client"
+	"github.com/wvanderen/babysitter/go/internal/tui"
+	"github.com/wvanderen/babysitter/go/pkg/plugin"
 )
 
 type BabysitterPlugin struct {
@@ -93,13 +93,6 @@ func (p *BabysitterPlugin) initCommands() {
 			Name: "Focus Output Panel",
 			Handler: func() tea.Cmd {
 				return p.setFocus(tui.FocusOutput)
-			},
-		},
-		{
-			ID:   "babysitter.focus.controls",
-			Name: "Focus Controls Panel",
-			Handler: func() tea.Cmd {
-				return p.setFocus(tui.FocusControls)
 			},
 		},
 	}

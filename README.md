@@ -37,7 +37,7 @@ cd go && go build -o ../priv/babysitter-tui ./cmd/babysitter-tui && cd ..
 ### Running the Daemon
 
 ```bash
-# Start the daemon (default port 4001)
+# Start the daemon (default port 4000)
 mix phx.server
 
 # Or with custom configuration
@@ -47,7 +47,7 @@ PORT=4002 mix phx.server
 ### Using the TUI
 
 ```bash
-# Connect to daemon (default http://localhost:4001)
+# Connect to daemon (default http://localhost:4000)
 ./priv/babysitter-tui
 
 # With custom API URL
@@ -63,7 +63,7 @@ PORT=4002 mix phx.server
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PORT` | `4001` | Daemon HTTP port |
+| `PORT` | `4000` | Daemon HTTP port |
 | `DATABASE_PATH` | `babysitter.db` | SQLite database path |
 
 ## API Reference
@@ -212,7 +212,7 @@ When a session is in a problematic state, you can intervene:
 ### TUI Command Line Options
 
 ```
--api string        Daemon API URL (default "http://localhost:4001")
+-api string        Daemon API URL (default "http://localhost:4000")
 -ws string         WebSocket URL (defaults to ws://<api-host>/ws)
 -session string    Session ID to select on start
 -connect           Auto-connect to WebSocket

@@ -310,8 +310,8 @@ func TestAttachSession(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"session": map[string]interface{}{
-				"id":           "session-1",
-				"tmux_session": "babysitter-session-1",
+				"id":        "session-1",
+				"tmux_name": "babysitter-session-1",
 			},
 		})
 	}))
@@ -332,8 +332,8 @@ func TestAttachSessionNoTmux(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"session": map[string]interface{}{
-				"id":           "session-1",
-				"tmux_session": "",
+				"id":        "session-1",
+				"tmux_name": "",
 			},
 		})
 	}))

@@ -81,12 +81,27 @@ func (o *OutputViewer) updateViewport() {
 }
 
 func (o OutputViewer) View() string {
-	title := outputTitleStyle.Render(" " + o.title + " ")
+	borderColor := "62"
+	if !o.focused {
+		borderColor = "240"
+	}
+
+	boxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color(borderColor)).
+		Padding(0, 1)
+
+	titleStyle := lipgloss.NewStyle().
+		Background(lipgloss.Color(borderColor)).
+		Foreground(lipgloss.Color("230")).
+		Padding(0, 1)
+
+	title := titleStyle.Render(" " + o.title + " ")
 	content := o.viewport.View()
 
 	box := lipgloss.JoinVertical(lipgloss.Left,
 		title,
-		outputBoxStyle.Render(content),
+		boxStyle.Render(content),
 	)
 	return box
 }
