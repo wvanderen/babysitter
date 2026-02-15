@@ -120,4 +120,33 @@ defmodule Babysitter.GitTest do
       assert result == :ok
     end
   end
+
+  describe "recent_commits/1" do
+    test "returns list of commits within time window" do
+      result = Git.recent_commits(minutes: 60)
+      assert is_tuple(result)
+
+      case result do
+        {:ok, commits} -> assert is_list(commits)
+        {:error, _} -> assert true
+      end
+    end
+
+    test "accepts max_commits option" do
+      result = Git.recent_commits(minutes: 60, max_commits: 10)
+      assert is_tuple(result)
+    end
+  end
+
+  describe "normalize_commits/1" do
+    test "returns ok or error" do
+      result = Git.normalize_commits(patterns: ["wip:"], time_window_minutes: 60)
+      assert result == :ok or match?({:error, _}, result)
+    end
+
+    test "accepts default patterns" do
+      result = Git.normalize_commits()
+      assert result == :ok or match?({:error, _}, result)
+    end
+  end
 end

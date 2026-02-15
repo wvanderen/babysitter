@@ -385,4 +385,119 @@ defmodule Babysitter.Git do
       {output, _code} -> {:error, String.trim(output)}
     end
   end
+
+  @doc """
+  Get recent commits within a time window.
+
+  ## Options
+    * `:minutes` - Time window in minutes (default: 60)
+    * `:max_commits` - Maximum number of commits to return (default: 50)
+
+  ## Examples
+
+      iex> Babysitter.Git.recent_commits(minutes: 60)
+      [%{hash: "abc123", message: "Add feature", time: ~N[2024-01-01T12:00:00Z]}]
+  """
+  @spec recent_commits(keyword()) :: {:ok, list(map())} | error()
+  def recent_commits(opts \\ []) do
+    minutes = Keyword.get(opts, :minutes, 60)
+    max_commits = Keyword.get(opts, :max_commits, 50)
+
+    since_time = DateTime.add(DateTime.utc_now(), -minutes * 60, :second)
+    since_arg = DateTime.to_iso8601(since_time)
+
+    args = [
+      "log",
+      "--since=#{since_arg}",
+      "--max-count=#{max_commits}",
+      "--pretty=format:%H|%s|%ci"
+    ]
+
+    case System.cmd("git", args, stderr_to_stdout: true) do
+      {output, 0} ->
+        commits =
+          output
+          |> String.split("\n", trim: true)
+          |> Enum.map(fn line ->
+            case String.split(line, "|", parts: 3) do
+              [hash, message, time_str] ->
+                {:ok, time, _} = DateTime.from_iso8601(String.trim(time_str))
+                %{hash: String.trim(hash), message: String.trim(message), time: time}
+
+              _ ->
+                nil
+            end
+          end)
+          |> Enum.reject(&is_nil/1)
+
+        {:ok, commits}
+
+      {output, _code} ->
+        {:error, String.trim(output)}
+    end
+  end
+
+  @doc """
+  Squash commits matching normalization patterns.
+
+  ## Options
+    * `:patterns` - List of patterns to match (default: ["wip:", "fixup:", "tmp:", "draft:"])
+    * `:time_window_minutes` - Time window in minutes (default: 60)
+    * `:base_branch` - Base branch to squash within (default: current branch)
+
+  ## Examples
+
+      iex> Babysitter.Git.normalize_commits(patterns: ["wip:"], time_window_minutes: 60)
+      :ok
+  """
+  @spec normalize_commits(keyword()) :: :ok | error()
+  def normalize_commits(opts \\ []) do
+    patterns = Keyword.get(opts, :patterns, ["wip:", "fixup:", "tmp:", "draft:"])
+    time_window_minutes = Keyword.get(opts, :time_window_minutes, 60)
+    _base_branch = Keyword.get(opts, :base_branch, current_branch())
+
+    case recent_commits(minutes: time_window_minutes, max_commits: 100) do
+      {:ok, commits} ->
+        squash_matching_commits(commits, patterns)
+
+      error ->
+        error
+    end
+  end
+
+  defp squash_matching_commits(commits, patterns) do
+    pattern_regex =
+      patterns
+      |> Enum.map(&Regex.escape/1)
+      |> Enum.join("|")
+      |> (&"^(#{&1})").()
+
+    matching_indices =
+      commits
+      |> Enum.with_index()
+      |> Enum.filter(fn {commit, _} ->
+        Regex.match?(~r/#{pattern_regex}/i, commit.message)
+      end)
+      |> Enum.map(fn {_, index} -> index end)
+
+    if matching_indices == [] do
+      :ok
+    else
+      first_match = List.last(matching_indices)
+
+      if first_match > 0 do
+        reset_target = Enum.at(commits, first_match).hash
+
+        case reset(mode: :soft, commit: reset_target) do
+          :ok ->
+            commit(message: "Squash normalized commits")
+
+          error ->
+            error
+        end
+      else
+        :ok
+      end
+    end
+  end
 end

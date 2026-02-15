@@ -34,6 +34,10 @@ defmodule Babysitter.Config do
       },
       pr_strategy: %{
         trigger: "manual"
+      },
+      normalization: %{
+        patterns: ["wip:", "fixup:", "tmp:", "draft:"],
+        time_window_minutes: 60
       }
     },
     intervention: %{
@@ -114,6 +118,12 @@ defmodule Babysitter.Config do
   """
   @spec git() :: map()
   def git, do: get(:git) || @default_config.git
+
+  @doc """
+  Get git normalization configuration.
+  """
+  @spec git_normalization() :: map()
+  def git_normalization, do: get(:git, :normalization) || @default_config.git.normalization
 
   @doc """
   Get intervention configuration.
@@ -205,6 +215,13 @@ defmodule Babysitter.Config do
           {{stage.summary}}
       pr_strategy:
         trigger: manual
+      normalization:
+        patterns:
+          - "wip:"
+          - "fixup:"
+          - "tmp:"
+          - "draft:"
+        time_window_minutes: 60
 
     intervention:
       default_intelligence: hybrid
