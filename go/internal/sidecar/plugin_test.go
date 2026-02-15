@@ -64,10 +64,10 @@ func TestCommands(t *testing.T) {
 	}
 
 	expectedCommands := []string{
-		"babysitter.start",
-		"babysitter.stop",
 		"babysitter.pause",
 		"babysitter.resume",
+		"babysitter.escalate",
+		"babysitter.skip",
 		"babysitter.attach",
 		"babysitter.refresh",
 		"babysitter.focus.sessions",
@@ -172,10 +172,10 @@ func TestControlCommands(t *testing.T) {
 		cmdID      string
 		wantAction tui.ControlAction
 	}{
-		{"babysitter.start", tui.ActionStart},
-		{"babysitter.stop", tui.ActionStop},
 		{"babysitter.pause", tui.ActionPause},
 		{"babysitter.resume", tui.ActionResume},
+		{"babysitter.escalate", tui.ActionEscalate},
+		{"babysitter.skip", tui.ActionSkip},
 		{"babysitter.attach", tui.ActionAttach},
 		{"babysitter.refresh", tui.ActionRefresh},
 	}

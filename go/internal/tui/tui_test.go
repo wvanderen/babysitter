@@ -3,6 +3,7 @@ package tui
 import (
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -247,4 +248,88 @@ func TestFormatDuration(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestControlsKeyBindings(t *testing.T) {
+	c := NewControls()
+	c.SetSession(&SessionItem{ID: "test-session"})
+
+	tests := []struct {
+		key      string
+		expected ControlAction
+	}{
+		{"p", ActionPause},
+		{"r", ActionResume},
+		{"e", ActionEscalate},
+		{"k", ActionSkip},
+		{"a", ActionAttach},
+		{"R", ActionRefresh},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.key, func(t *testing.T) {
+			c.focused = true
+			keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(tt.key)}
+			_, cmd := c.Update(keyMsg)
+			if cmd == nil {
+				t.Fatalf("expected cmd for key %q", tt.key)
+			}
+			msg := cmd()
+			ctrlMsg, ok := msg.(ControlMsg)
+			if !ok {
+				t.Fatalf("expected ControlMsg, got %T", msg)
+			}
+			if ctrlMsg.Action != tt.expected {
+				t.Errorf("expected action %v, got %v", tt.expected, ctrlMsg.Action)
+			}
+			if ctrlMsg.SessionID != "test-session" {
+				t.Errorf("expected session ID 'test-session', got %q", ctrlMsg.SessionID)
+			}
+		})
+	}
+}
+
+func TestControlsNoActionWithoutSession(t *testing.T) {
+	c := NewControls()
+	c.focused = true
+
+	_, cmd := c.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}})
+	if cmd != nil {
+		t.Errorf("expected nil cmd when no session selected")
+	}
+}
+
+func TestControlsButtons(t *testing.T) {
+	c := NewControls()
+
+	expectedButtons := []string{"Pause", "Resume", "Escalate", "Skip", "Attach", "Refresh"}
+	if len(c.buttons) != len(expectedButtons) {
+		t.Errorf("expected %d buttons, got %d", len(expectedButtons), len(c.buttons))
+	}
+
+	for i, btn := range expectedButtons {
+		if c.buttons[i] != btn {
+			t.Errorf("expected button %d to be %q, got %q", i, btn, c.buttons[i])
+		}
+	}
+}
+
+func TestControlsHelpText(t *testing.T) {
+	c := NewControls()
+
+	expectedKeys := []string{"[p]", "[r]", "[e]", "[k]", "[a]", "[R]"}
+	for _, key := range expectedKeys {
+		if !contains(c.helpText, key) {
+			t.Errorf("expected help text to contain %q", key)
+		}
+	}
+}
+
+func contains(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }

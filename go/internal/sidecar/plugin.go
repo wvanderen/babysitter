@@ -40,20 +40,6 @@ func (p *BabysitterPlugin) Init(ctx *plugin.Context) error {
 func (p *BabysitterPlugin) initCommands() {
 	p.commands = []plugin.Command{
 		{
-			ID:   "babysitter.start",
-			Name: "Start Session",
-			Handler: func() tea.Cmd {
-				return p.sendControlMsg(tui.ActionStart)
-			},
-		},
-		{
-			ID:   "babysitter.stop",
-			Name: "Stop Session",
-			Handler: func() tea.Cmd {
-				return p.sendControlMsg(tui.ActionStop)
-			},
-		},
-		{
 			ID:   "babysitter.pause",
 			Name: "Pause Session",
 			Handler: func() tea.Cmd {
@@ -65,6 +51,20 @@ func (p *BabysitterPlugin) initCommands() {
 			Name: "Resume Session",
 			Handler: func() tea.Cmd {
 				return p.sendControlMsg(tui.ActionResume)
+			},
+		},
+		{
+			ID:   "babysitter.escalate",
+			Name: "Escalate Session",
+			Handler: func() tea.Cmd {
+				return p.sendControlMsg(tui.ActionEscalate)
+			},
+		},
+		{
+			ID:   "babysitter.skip",
+			Name: "Skip Stage",
+			Handler: func() tea.Cmd {
+				return p.sendControlMsg(tui.ActionSkip)
 			},
 		},
 		{

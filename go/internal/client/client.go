@@ -164,6 +164,33 @@ func (c *Client) ResumeSession(id string) error {
 	return c.doRequest("POST", "/api/sessions/"+id+"/resume", nil, nil)
 }
 
+type InterventionAction string
+
+const (
+	InterventionRetry    InterventionAction = "retry"
+	InterventionRestart  InterventionAction = "restart"
+	InterventionEscalate InterventionAction = "escalate"
+	InterventionSkip     InterventionAction = "skip"
+)
+
+func (c *Client) InterveneSession(id string, action InterventionAction, reason string) error {
+	body := map[string]interface{}{
+		"action": string(action),
+	}
+	if reason != "" {
+		body["reason"] = reason
+	}
+	return c.doRequest("POST", "/api/sessions/"+id+"/intervene", body, nil)
+}
+
+func (c *Client) AttachSession(id string) (string, error) {
+	session, err := c.GetSession(id)
+	if err != nil {
+		return "", err
+	}
+	return session.TmuxSession, nil
+}
+
 func (c *Client) ListWorkflows() (*WorkflowList, error) {
 	var list WorkflowList
 	if err := c.doRequest("GET", "/api/workflows", nil, &list); err != nil {

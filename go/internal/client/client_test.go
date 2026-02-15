@@ -265,3 +265,86 @@ func TestWSMessageFields(t *testing.T) {
 		t.Errorf("expected Hello world, got %s", msg.Output)
 	}
 }
+
+func TestInterveneSession(t *testing.T) {
+	tests := []struct {
+		name   string
+		action InterventionAction
+	}{
+		{"retry", InterventionRetry},
+		{"restart", InterventionRestart},
+		{"escalate", InterventionEscalate},
+		{"skip", InterventionSkip},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/api/sessions/session-1/intervene" {
+					t.Errorf("expected /api/sessions/session-1/intervene, got %s", r.URL.Path)
+				}
+				if r.Method != "POST" {
+					t.Errorf("expected POST, got %s", r.Method)
+				}
+				w.WriteHeader(http.StatusOK)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"status": "ok",
+					"action": tt.name,
+				})
+			}))
+			defer server.Close()
+
+			c := New(server.URL)
+			if err := c.InterveneSession("session-1", tt.action, "test reason"); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestAttachSession(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/sessions/session-1" {
+			t.Errorf("expected /api/sessions/session-1, got %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"session": map[string]interface{}{
+				"id":           "session-1",
+				"tmux_session": "babysitter-session-1",
+			},
+		})
+	}))
+	defer server.Close()
+
+	c := New(server.URL)
+	tmuxSession, err := c.AttachSession("session-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tmuxSession != "babysitter-session-1" {
+		t.Errorf("expected babysitter-session-1, got %s", tmuxSession)
+	}
+}
+
+func TestAttachSessionNoTmux(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"session": map[string]interface{}{
+				"id":           "session-1",
+				"tmux_session": "",
+			},
+		})
+	}))
+	defer server.Close()
+
+	c := New(server.URL)
+	tmuxSession, err := c.AttachSession("session-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tmuxSession != "" {
+		t.Errorf("expected empty tmux session, got %s", tmuxSession)
+	}
+}

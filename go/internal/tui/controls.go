@@ -35,6 +35,8 @@ const (
 	ActionResume
 	ActionAttach
 	ActionRefresh
+	ActionEscalate
+	ActionSkip
 )
 
 type ControlMsg struct {
@@ -55,8 +57,8 @@ func NewControls() Controls {
 	return Controls{
 		focused:  true,
 		selected: 0,
-		buttons:  []string{"Start", "Stop", "Pause", "Resume", "Attach", "Refresh"},
-		helpText: "[s] Start  [x] Stop  [p] Pause  [r] Resume  [a] Attach  [R] Refresh",
+		buttons:  []string{"Pause", "Resume", "Escalate", "Skip", "Attach", "Refresh"},
+		helpText: "[p] Pause  [r] Resume  [e] Escalate  [k] Skip  [a] Attach  [R] Refresh",
 	}
 }
 
@@ -71,14 +73,6 @@ func (c Controls) Update(msg tea.Msg) (Controls, tea.Cmd) {
 	case tea.KeyMsg:
 		if c.focused && c.session != nil {
 			switch msg.String() {
-			case "s":
-				return c, func() tea.Msg {
-					return ControlMsg{Action: ActionStart, SessionID: c.session.ID}
-				}
-			case "x":
-				return c, func() tea.Msg {
-					return ControlMsg{Action: ActionStop, SessionID: c.session.ID}
-				}
 			case "p":
 				return c, func() tea.Msg {
 					return ControlMsg{Action: ActionPause, SessionID: c.session.ID}
@@ -86,6 +80,14 @@ func (c Controls) Update(msg tea.Msg) (Controls, tea.Cmd) {
 			case "r":
 				return c, func() tea.Msg {
 					return ControlMsg{Action: ActionResume, SessionID: c.session.ID}
+				}
+			case "e":
+				return c, func() tea.Msg {
+					return ControlMsg{Action: ActionEscalate, SessionID: c.session.ID}
+				}
+			case "k":
+				return c, func() tea.Msg {
+					return ControlMsg{Action: ActionSkip, SessionID: c.session.ID}
 				}
 			case "a":
 				return c, func() tea.Msg {

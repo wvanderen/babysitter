@@ -2,6 +2,8 @@ package tui
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
@@ -126,6 +128,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.sessionsList.SetFocused(m.focus == FocusSessions)
 		m.outputViewer.SetFocused(m.focus == FocusOutput)
 		m.controls.SetFocused(m.focus == FocusControls)
+
+	case ControlMsg:
+		cmds = append(cmds, m.handleControlAction(msg))
 	}
 
 	var cmd tea.Cmd
@@ -231,4 +236,80 @@ func (m AppModel) View() string {
 
 func (m *AppModel) SetSessions(sessions []client.Session) {
 	m.sessions = sessions
+}
+
+type ActionResult struct {
+	Action  string
+	Success bool
+	Message string
+}
+
+func (m *AppModel) handleControlAction(msg ControlMsg) tea.Cmd {
+	if m.client == nil {
+		return func() tea.Msg {
+			return ActionResult{Action: "control", Success: false, Message: "no client"}
+		}
+	}
+
+	switch msg.Action {
+	case ActionPause:
+		return func() tea.Msg {
+			err := m.client.PauseSession(msg.SessionID)
+			if err != nil {
+				return ActionResult{Action: "pause", Success: false, Message: err.Error()}
+			}
+			return ActionResult{Action: "pause", Success: true, Message: "Session paused"}
+		}
+
+	case ActionResume:
+		return func() tea.Msg {
+			err := m.client.ResumeSession(msg.SessionID)
+			if err != nil {
+				return ActionResult{Action: "resume", Success: false, Message: err.Error()}
+			}
+			return ActionResult{Action: "resume", Success: true, Message: "Session resumed"}
+		}
+
+	case ActionEscalate:
+		return func() tea.Msg {
+			err := m.client.InterveneSession(msg.SessionID, client.InterventionEscalate, "manual escalation via TUI")
+			if err != nil {
+				return ActionResult{Action: "escalate", Success: false, Message: err.Error()}
+			}
+			return ActionResult{Action: "escalate", Success: true, Message: "Session escalated"}
+		}
+
+	case ActionSkip:
+		return func() tea.Msg {
+			err := m.client.InterveneSession(msg.SessionID, client.InterventionSkip, "manual skip via TUI")
+			if err != nil {
+				return ActionResult{Action: "skip", Success: false, Message: err.Error()}
+			}
+			return ActionResult{Action: "skip", Success: true, Message: "Stage skipped"}
+		}
+
+	case ActionAttach:
+		return func() tea.Msg {
+			tmuxSession, err := m.client.AttachSession(msg.SessionID)
+			if err != nil {
+				return ActionResult{Action: "attach", Success: false, Message: err.Error()}
+			}
+			if tmuxSession == "" {
+				return ActionResult{Action: "attach", Success: false, Message: "no tmux session"}
+			}
+			attachCmd := exec.Command("tmux", "attach", "-t", tmuxSession)
+			attachCmd.Stdin = os.Stdin
+			attachCmd.Stdout = os.Stdout
+			attachCmd.Stderr = os.Stderr
+			if err := attachCmd.Run(); err != nil {
+				return ActionResult{Action: "attach", Success: false, Message: err.Error()}
+			}
+			return ActionResult{Action: "attach", Success: true, Message: "Attached to " + tmuxSession}
+		}
+
+	case ActionRefresh:
+		return m.fetchSessions()
+	}
+
+	return nil
 }
