@@ -49,24 +49,37 @@ defmodule BabysitterWeb.WorkflowController do
             variables
           end
 
-        opts = [
-          session_id: session_id,
-          variables: final_vars
-        ]
-
-        case Babysitter.WorkflowSupervisor.start_workflow(id, opts) do
-          {:ok, instance_id} ->
-            json(conn, %{
-              workflow_id: id,
-              instance_id: instance_id,
+        case Babysitter.SessionManager.create_session(session_id,
+               issue_id: issue_id,
+               variables: final_vars
+             ) do
+          {:ok, _pid} ->
+            opts = [
               session_id: session_id,
-              status: :started
-            })
+              variables: final_vars
+            ]
+
+            case Babysitter.WorkflowSupervisor.start_workflow(id, opts) do
+              {:ok, instance_id} ->
+                json(conn, %{
+                  workflow_id: id,
+                  instance_id: instance_id,
+                  session_id: session_id,
+                  status: :started
+                })
+
+              {:error, reason} ->
+                Babysitter.SessionManager.destroy_session(session_id)
+
+                conn
+                |> put_status(:unprocessable_entity)
+                |> json(%{error: "Failed to start workflow", details: inspect(reason)})
+            end
 
           {:error, reason} ->
             conn
             |> put_status(:unprocessable_entity)
-            |> json(%{error: "Failed to start workflow", details: inspect(reason)})
+            |> json(%{error: "Failed to create session", details: inspect(reason)})
         end
 
       {:error, :not_found} ->

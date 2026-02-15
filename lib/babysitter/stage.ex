@@ -6,6 +6,7 @@ defmodule Babysitter.Stage do
   with validation rules and transitions to subsequent stages.
   """
 
+  @derive Jason.Encoder
   @type stage_type :: :agent | :action | :validation | :decision
   @type stage_id :: String.t() | atom()
 

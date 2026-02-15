@@ -6,6 +6,7 @@ defmodule Babysitter.Validation do
   to determine if it was successful.
   """
 
+  @derive Jason.Encoder
   @type validation_type ::
           :output_contains
           | :output_matches

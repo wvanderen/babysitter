@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"fmt"
+
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -28,6 +30,7 @@ type WorkflowSelect struct {
 	list     list.Model
 	selected bool
 	focused  bool
+	err      error
 }
 
 func NewWorkflowSelect() WorkflowSelect {
@@ -54,6 +57,7 @@ func (w WorkflowSelect) Init() tea.Cmd {
 
 type WorkflowSelectMsg struct {
 	Workflows []client.Workflow
+	Err       error
 }
 
 type WorkflowSelectedMsg struct {
@@ -65,11 +69,18 @@ func (w WorkflowSelect) Update(msg tea.Msg) (WorkflowSelect, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case WorkflowSelectMsg:
-		items := make([]list.Item, len(msg.Workflows))
-		for i, wf := range msg.Workflows {
-			items[i] = WorkflowItem{ID: wf.ID, Name: wf.Name}
+		if msg.Err != nil {
+			w.err = msg.Err
+		} else if len(msg.Workflows) == 0 {
+			w.err = fmt.Errorf("no workflows available")
+		} else {
+			w.err = nil
+			items := make([]list.Item, len(msg.Workflows))
+			for i, wf := range msg.Workflows {
+				items[i] = WorkflowItem{ID: wf.ID, Name: wf.Name}
+			}
+			w.list.SetItems(items)
 		}
-		w.list.SetItems(items)
 
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -94,6 +105,9 @@ func (w WorkflowSelect) Update(msg tea.Msg) (WorkflowSelect, tea.Cmd) {
 }
 
 func (w WorkflowSelect) View() string {
+	if w.err != nil {
+		return w.list.View() + "\n\nError: " + w.err.Error()
+	}
 	return w.list.View()
 }
 

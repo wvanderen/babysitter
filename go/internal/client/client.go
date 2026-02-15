@@ -53,11 +53,11 @@ type SessionList struct {
 }
 
 type Workflow struct {
-	ID        string  `json:"id"`
-	Name      string  `json:"name"`
-	Stages    []Stage `json:"stages"`
-	Status    string  `json:"status"`
-	CreatedAt string  `json:"created_at"`
+	ID        string           `json:"id"`
+	Name      string           `json:"name"`
+	Stages    map[string]Stage `json:"stages"`
+	Status    string           `json:"status"`
+	CreatedAt string           `json:"created_at"`
 }
 
 type Stage struct {

@@ -27,7 +27,7 @@ func New() *BabysitterPlugin {
 }
 
 func (p *BabysitterPlugin) Init(ctx *plugin.Context) error {
-	baseURL := "http://localhost:4001"
+	baseURL := "http://localhost:4000"
 	if url, ok := ctx.Config["daemon_url"].(string); ok && url != "" {
 		baseURL = url
 	}
@@ -119,7 +119,12 @@ func (p *BabysitterPlugin) setFocus(area tui.FocusArea) tea.Cmd {
 
 func (p *BabysitterPlugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 	updated, cmd := p.appModel.Update(msg)
-	p.appModel = updated.(tui.AppModel)
+	switch v := updated.(type) {
+	case tui.AppModel:
+		p.appModel = v
+	case *tui.AppModel:
+		p.appModel = *v
+	}
 
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		if keyMsg.String() == "q" || keyMsg.String() == "ctrl+c" {

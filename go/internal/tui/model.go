@@ -190,6 +190,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case NewSessionStartedMsg:
 		m.viewState = ViewNormal
 		m.newSession = nil
+		m.outputViewer.AppendOutput(fmt.Sprintf("Workflow started! Session: %s Instance: %s\n", msg.SessionID, msg.InstanceID))
 		cmds = append(cmds, m.fetchSessions())
 
 	case NewSessionCanceledMsg:
