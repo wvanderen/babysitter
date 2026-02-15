@@ -79,6 +79,31 @@ defmodule Babysitter.BroadcastTest do
     end
   end
 
+  describe "session_escalated/3" do
+    test "broadcasts session:escalated event with issue_id and reason", %{session_id: session_id} do
+      Broadcast.subscribe(session_id)
+
+      :ok = Broadcast.session_escalated(session_id, "td-123", "Max retries exceeded")
+
+      assert_receive %{event: "session:escalated", payload: payload}
+      assert payload.session_id == session_id
+      assert payload.issue_id == "td-123"
+      assert payload.reason == "Max retries exceeded"
+      assert payload.timestamp != nil
+    end
+
+    test "broadcasts session:escalated event without reason", %{session_id: session_id} do
+      Broadcast.subscribe(session_id)
+
+      :ok = Broadcast.session_escalated(session_id, "td-456", nil)
+
+      assert_receive %{event: "session:escalated", payload: payload}
+      assert payload.session_id == session_id
+      assert payload.issue_id == "td-456"
+      assert payload.reason == nil
+    end
+  end
+
   describe "multiple subscribers" do
     test "all subscribers receive events", %{session_id: session_id} do
       parent = self()

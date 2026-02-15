@@ -164,6 +164,28 @@ defmodule Babysitter.TD.CLI do
   end
 
   @doc """
+  Block an issue with a reason.
+
+  ## Options
+    * `:work_dir` - Working directory for td command
+    * `:reason` - Reason for blocking
+  """
+  @spec block(String.t(), keyword()) :: cli_result()
+  def block(issue_id, opts \\ [])
+
+  def block(issue_id, opts) when is_binary(issue_id) do
+    args = [issue_id]
+
+    args =
+      case Keyword.get(opts, :reason) do
+        nil -> args
+        reason -> args ++ ["--reason", reason]
+      end
+
+    execute_td(["block" | args], opts)
+  end
+
+  @doc """
   Execute td command and return result.
   """
   @spec execute_td([String.t()], keyword()) :: cli_result()

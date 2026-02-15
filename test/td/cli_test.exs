@@ -72,6 +72,19 @@ defmodule Babysitter.TD.CLITest do
       assert "td-123" in args
       assert "--minor" in args
     end
+
+    test "block builds args with reason" do
+      args = build_block_args_for_test("td-123", reason: "Needs human review")
+      assert "td-123" in args
+      assert "--reason" in args
+      assert "Needs human review" in args
+    end
+
+    test "block builds args without reason" do
+      args = build_block_args_for_test("td-123", [])
+      assert "td-123" in args
+      refute "--reason" in args
+    end
   end
 
   defp build_log_args_for_test(issue_id, message, opts) do
@@ -113,6 +126,15 @@ defmodule Babysitter.TD.CLITest do
       args ++ ["--minor"]
     else
       args
+    end
+  end
+
+  defp build_block_args_for_test(issue_id, opts) do
+    args = [issue_id]
+
+    case Keyword.get(opts, :reason) do
+      nil -> args
+      reason -> args ++ ["--reason", reason]
     end
   end
 end

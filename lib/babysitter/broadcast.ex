@@ -63,6 +63,19 @@ defmodule Babysitter.Broadcast do
   end
 
   @doc """
+  Broadcast escalation event with issue context.
+  """
+  @spec session_escalated(session_id(), String.t(), String.t() | nil) :: :ok
+  def session_escalated(session_id, issue_id, reason \\ nil) do
+    broadcast(session_id, "session:escalated", %{
+      session_id: session_id,
+      timestamp: DateTime.utc_now() |> DateTime.to_iso8601(),
+      issue_id: issue_id,
+      reason: reason
+    })
+  end
+
+  @doc """
   Subscribe to all events for a session.
   """
   @spec subscribe(session_id()) :: :ok | {:error, term()}
