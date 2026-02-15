@@ -82,6 +82,10 @@ func (m AppModel) fetchSessions() tea.Cmd {
 
 type errMsg struct{ error }
 
+type FocusMsg struct {
+	Area FocusArea
+}
+
 func (e errMsg) Error() string { return e.error.Error() }
 
 func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -116,6 +120,12 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case client.WSMessage:
 		m.handleWSMessage(msg)
+
+	case FocusMsg:
+		m.focus = msg.Area
+		m.sessionsList.SetFocused(m.focus == FocusSessions)
+		m.outputViewer.SetFocused(m.focus == FocusOutput)
+		m.controls.SetFocused(m.focus == FocusControls)
 	}
 
 	var cmd tea.Cmd
