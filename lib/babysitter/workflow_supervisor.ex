@@ -77,10 +77,13 @@ defmodule Babysitter.WorkflowSupervisor do
       case DynamicSupervisor.start_child(Babysitter.WorkflowSupervisor, spec) do
         {:ok, _pid} ->
           if auto_start do
-            Babysitter.WorkflowInstance.start(instance_id, session_id: session_id)
+            case Babysitter.WorkflowInstance.start(instance_id, session_id: session_id) do
+              {:ok, _state} -> {:ok, instance_id}
+              {:error, reason} -> {:error, reason}
+            end
+          else
+            {:ok, instance_id}
           end
-
-          {:ok, instance_id}
 
         {:error, {:already_started, _pid}} ->
           {:error, :already_exists}

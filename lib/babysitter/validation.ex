@@ -139,6 +139,10 @@ defmodule Babysitter.Validation do
     func.(output, exit_code)
   end
 
+  defp do_validate(%__MODULE__{type: type} = v, _output, _exit_code) do
+    error(v, "unsupported validation type: #{type}")
+  end
+
   defp error(validation, message) do
     {:error, validation.error_message || message}
   end

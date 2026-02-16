@@ -152,8 +152,10 @@ defmodule Babysitter.State.Persistence do
   end
 
   defp to_naive_datetime(nil), do: nil
-  defp to_naive_datetime(%NaiveDateTime{} = dt), do: dt
-  defp to_naive_datetime(%DateTime{} = dt), do: DateTime.to_naive(dt)
+  defp to_naive_datetime(%NaiveDateTime{} = dt), do: NaiveDateTime.truncate(dt, :second)
+
+  defp to_naive_datetime(%DateTime{} = dt),
+    do: dt |> DateTime.to_naive() |> NaiveDateTime.truncate(:second)
 
   defp serialize_validation_results(nil), do: %{}
 

@@ -172,9 +172,17 @@ defmodule BabysitterWeb.SessionController do
           %{
             id: state.id,
             workflow_id: state.workflow_id,
+            session_id: state.session_id,
             status: state.status,
             current_stage: state.current_stage,
-            execution_history: state.execution_history
+            started_at: state.started_at,
+            completed_at: state.completed_at,
+            failure_reason: state.failure_reason,
+            escalation_reason: state.escalation_reason,
+            retry_count: state.retry_count,
+            max_retries: state.max_retries,
+            execution_history: state.execution_history,
+            variables: state.variables
           }
 
         _ ->

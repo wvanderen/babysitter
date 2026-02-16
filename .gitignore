@@ -8,3 +8,6 @@
 erl_crash.dump
 *.ez
 *.beam
+
+# btca local data
+.btca/

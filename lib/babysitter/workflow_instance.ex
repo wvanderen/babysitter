@@ -43,11 +43,14 @@ defmodule Babysitter.WorkflowInstance do
 
   @type execution_entry :: %{
           stage_id: atom(),
+          stage_type: atom() | nil,
           status: :success | :failure | :timeout,
           started_at: DateTime.t(),
           finished_at: DateTime.t(),
           output: String.t() | nil,
-          error: String.t() | nil
+          error: String.t() | nil,
+          duration_ms: non_neg_integer() | nil,
+          metadata: map() | nil
         }
 
   @enforce_keys [:id, :workflow_id]
@@ -66,6 +69,17 @@ defmodule Babysitter.WorkflowInstance do
     retry_count: 0,
     max_retries: 3
   ]
+
+  def child_spec(opts) do
+    id = Keyword.fetch!(opts, :id)
+
+    %{
+      id: {__MODULE__, id},
+      start: {__MODULE__, :start_link, [opts]},
+      restart: :transient,
+      type: :worker
+    }
+  end
 
   @valid_transitions %{
     pending: [:running, :stopped],
@@ -304,11 +318,14 @@ defmodule Babysitter.WorkflowInstance do
     if state.current_stage == stage_id and state.status == :running do
       entry = %{
         stage_id: stage_id,
+        stage_type: nil,
         status: :timeout,
         started_at: DateTime.utc_now(),
         finished_at: DateTime.utc_now(),
         output: nil,
-        error: "Stage timed out"
+        error: "Stage timed out",
+        duration_ms: 0,
+        metadata: nil
       }
 
       new_state = %{
@@ -364,13 +381,22 @@ defmodule Babysitter.WorkflowInstance do
             duration_ms: duration_ms
           })
 
+          metadata = %{
+            type: stage.type,
+            command: Map.get(stage, :command),
+            prompt: Map.get(stage, :prompt)
+          }
+
           entry = %{
             stage_id: state.current_stage,
+            stage_type: stage.type,
             status: result.status,
             started_at: started_at,
             finished_at: result.finished_at,
             output: result.output,
-            error: result.error
+            error: result.error,
+            duration_ms: duration_ms,
+            metadata: metadata
           }
 
           new_state = %{state | execution_history: state.execution_history ++ [entry]}
