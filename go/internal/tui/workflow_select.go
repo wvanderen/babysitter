@@ -3,49 +3,26 @@ package tui
 import (
 	"fmt"
 
-	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/wvanderen/babysitter/go/internal/client"
-	"github.com/wvanderen/babysitter/go/internal/styles"
+	"github.com/wvanderen/babysitter/go/internal/modal"
 )
 
-type WorkflowItem struct {
-	ID   string
-	Name string
-}
-
-func (w WorkflowItem) FilterValue() string {
-	return w.ID + " " + w.Name
-}
-
-func (w WorkflowItem) Title() string       { return w.Name }
-func (w WorkflowItem) Description() string { return w.ID }
-func (w WorkflowItem) ShortString() string { return w.Name }
-
 type WorkflowSelect struct {
-	list     list.Model
-	selected bool
-	focused  bool
-	err      error
+	modal       *modal.Modal
+	workflows   []client.Workflow
+	items       []modal.ListItem
+	selectedIdx int
+	err         error
+	width       int
+	height      int
 }
 
 func NewWorkflowSelect() WorkflowSelect {
-	delegate := list.NewDefaultDelegate()
-	delegate.SetHeight(1)
-	delegate.SetSpacing(0)
-
-	l := list.New([]list.Item{}, delegate, 40, 15)
-	l.SetShowTitle(true)
-	l.Title = "Select Workflow"
-	l.SetShowStatusBar(false)
-	l.SetFilteringEnabled(true)
-	l.Styles.Title = styles.PanelHeader
-	l.Styles.TitleBar = lipgloss.NewStyle().Padding(0, 0, 0, 1)
-
 	return WorkflowSelect{
-		list:    l,
-		focused: true,
+		selectedIdx: 0,
+		width:       50,
+		height:      20,
 	}
 }
 
@@ -62,9 +39,24 @@ type WorkflowSelectedMsg struct {
 	Workflow client.Workflow
 }
 
-func (w WorkflowSelect) Update(msg tea.Msg) (WorkflowSelect, tea.Cmd) {
-	var cmd tea.Cmd
+func (w *WorkflowSelect) ensureModal() {
+	w.items = make([]modal.ListItem, len(w.workflows))
+	for i, wf := range w.workflows {
+		w.items[i] = modal.ListItem{
+			ID:    wf.ID,
+			Label: wf.Name,
+		}
+	}
 
+	w.modal = modal.New("Select Workflow",
+		modal.WithWidth(50),
+		modal.WithHints(true),
+	).AddSection(modal.List("workflow", w.items, &w.selectedIdx,
+		modal.WithMaxVisible(8),
+	))
+}
+
+func (w WorkflowSelect) Update(msg tea.Msg) (WorkflowSelect, tea.Cmd) {
 	switch msg := msg.(type) {
 	case WorkflowSelectMsg:
 		if msg.Err != nil {
@@ -73,48 +65,56 @@ func (w WorkflowSelect) Update(msg tea.Msg) (WorkflowSelect, tea.Cmd) {
 			w.err = fmt.Errorf("no workflows available")
 		} else {
 			w.err = nil
-			items := make([]list.Item, len(msg.Workflows))
-			for i, wf := range msg.Workflows {
-				items[i] = WorkflowItem{ID: wf.ID, Name: wf.Name}
-			}
-			w.list.SetItems(items)
+			w.workflows = msg.Workflows
+			w.selectedIdx = 0
+			w.ensureModal()
 		}
 
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "enter":
-			if item, ok := w.list.SelectedItem().(WorkflowItem); ok {
-				w.selected = true
-				return w, func() tea.Msg {
-					return WorkflowSelectedMsg{Workflow: client.Workflow{ID: item.ID, Name: item.Name}}
+		if w.modal != nil {
+			action, _ := w.modal.HandleKey(msg)
+			switch action {
+			case "cancel":
+				return w, func() tea.Msg { return CancelWorkflowSelectMsg{} }
+			default:
+				if action != "" {
+					for _, wf := range w.workflows {
+						if wf.ID == action {
+							return w, func() tea.Msg {
+								return WorkflowSelectedMsg{Workflow: wf}
+							}
+						}
+					}
 				}
 			}
-		case "esc":
-			w.selected = true
-			return w, func() tea.Msg { return CancelWorkflowSelectMsg{} }
 		}
 	}
 
-	if w.focused {
-		w.list, cmd = w.list.Update(msg)
-	}
-
-	return w, cmd
+	return w, nil
 }
 
 func (w WorkflowSelect) View() string {
 	if w.err != nil {
-		return w.list.View() + "\n\n" + styles.StatusFailed.Render("Error: "+w.err.Error())
+		return "Error: " + w.err.Error()
 	}
-	return w.list.View()
+
+	if w.modal == nil {
+		return "Loading workflows..."
+	}
+
+	hitMap := &modal.HitMap{}
+	return w.modal.Render(w.width, w.height, hitMap)
 }
 
 func (w *WorkflowSelect) SetFocused(focused bool) {
-	w.focused = focused
 }
 
 func (w *WorkflowSelect) SetSize(width, height int) {
-	w.list.SetSize(width, height)
+	w.width = width
+	w.height = height
+	if w.modal != nil {
+		w.modal.SetWidth(min(50, width-4))
+	}
 }
 
 type CancelWorkflowSelectMsg struct{}

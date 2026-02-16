@@ -3,15 +3,16 @@ package tui
 import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
-	"github.com/wvanderen/babysitter/go/internal/styles"
+	"github.com/wvanderen/babysitter/go/internal/modal"
 )
 
 type NewSession struct {
 	workflowID   string
 	workflowName string
 	issueID      textinput.Model
-	focused      bool
+	modal        *modal.Modal
+	width        int
+	height       int
 }
 
 func NewNewSession(workflowID, workflowName string) NewSession {
@@ -24,8 +25,25 @@ func NewNewSession(workflowID, workflowName string) NewSession {
 		workflowID:   workflowID,
 		workflowName: workflowName,
 		issueID:      issueInput,
-		focused:      true,
+		width:        50,
+		height:       20,
 	}
+}
+
+func (n *NewSession) ensureModal() {
+	n.modal = modal.New("New Session: "+n.workflowName,
+		modal.WithWidth(50),
+		modal.WithHints(true),
+		modal.WithPrimaryAction("start"),
+	).
+		AddSection(modal.Text("Start a new workflow session")).
+		AddSection(modal.Spacer()).
+		AddSection(modal.InputWithLabel("issue", "Issue ID:", &n.issueID)).
+		AddSection(modal.Spacer()).
+		AddSection(modal.Buttons(
+			modal.Btn(" Start ", "start"),
+			modal.Btn(" Cancel ", "cancel"),
+		))
 }
 
 func (n NewSession) Init() tea.Cmd {
@@ -41,12 +59,17 @@ type NewSessionStartedMsg struct {
 type NewSessionCanceledMsg struct{}
 
 func (n NewSession) Update(msg tea.Msg) (NewSession, tea.Cmd) {
-	var cmd tea.Cmd
+	if n.modal == nil {
+		n.ensureModal()
+	}
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "enter":
+		action, cmd := n.modal.HandleKey(msg)
+		switch action {
+		case "cancel":
+			return n, func() tea.Msg { return NewSessionCanceledMsg{} }
+		case "start", "issue":
 			issueID := n.issueID.Value()
 			return n, func() tea.Msg {
 				return ExecuteWorkflowMsg{
@@ -54,36 +77,34 @@ func (n NewSession) Update(msg tea.Msg) (NewSession, tea.Cmd) {
 					IssueID:    issueID,
 				}
 			}
-		case "esc":
-			return n, func() tea.Msg { return NewSessionCanceledMsg{} }
 		}
+		return n, cmd
 	}
 
-	n.issueID, cmd = n.issueID.Update(msg)
-	return n, cmd
+	return n, nil
 }
 
 func (n NewSession) View() string {
-	title := "New Session: " + n.workflowName
-	issueField := styles.Muted.Render("Issue ID:") + " " + n.issueID.View()
+	if n.modal == nil {
+		n.ensureModal()
+	}
 
-	formStyle := lipgloss.NewStyle().Padding(1, 2)
-
-	return formStyle.Render(
-		styles.PanelHeader.Render(title) + "\n\n" +
-			issueField + "\n\n" +
-			styles.Muted.Render("[Enter] Start  [Esc] Cancel"),
-	)
+	hitMap := &modal.HitMap{}
+	return n.modal.Render(n.width, n.height, hitMap)
 }
 
 func (n *NewSession) SetFocused(focused bool) {
-	n.focused = focused
-	if !focused {
-		n.issueID.Blur()
-	} else {
+	if focused {
 		n.issueID.Focus()
+	} else {
+		n.issueID.Blur()
 	}
 }
 
 func (n *NewSession) SetSize(width, height int) {
+	n.width = width
+	n.height = height
+	if n.modal != nil {
+		n.modal.SetWidth(min(50, width-4))
+	}
 }
