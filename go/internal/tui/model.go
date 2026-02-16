@@ -15,11 +15,8 @@ import (
 type FocusArea int
 
 const (
-	FocusSessions FocusArea = iota
-	FocusStage
-	FocusDiagram
-	FocusLogs
-	FocusOutput
+	FocusSidebar FocusArea = iota
+	FocusMain
 )
 
 type ViewState int
@@ -32,10 +29,12 @@ const (
 
 var (
 	appStyle = lipgloss.NewStyle().Padding(1, 2)
+
+	sidebarWidth = 28
 )
 
 type AppModel struct {
-	sessionsList    SessionList
+	sidebar         Sidebar
 	stageView       StageView
 	workflowDiagram WorkflowDiagram
 	logsPanel       LogsPanel
@@ -47,29 +46,31 @@ type AppModel struct {
 	client          *client.Client
 	wsClient        *client.WSClient
 	sessions        []client.Session
-	currentIndex    int
 	currentInstance *client.WorkflowInstance
 	currentWorkflow *client.Workflow
 	connected       bool
 	quitting        bool
 	err             error
+	width           int
+	height          int
 }
 
 func NewAppModel(apiClient *client.Client) AppModel {
 	return AppModel{
-		sessionsList:    NewSessionList(),
+		sidebar:         NewSidebar(),
 		stageView:       NewStageView(),
 		workflowDiagram: NewWorkflowDiagram(),
 		logsPanel:       NewLogsPanel(),
 		outputViewer:    NewOutputViewer(),
 		workflowSelect:  NewWorkflowSelect(),
-		focus:           FocusSessions,
+		focus:           FocusSidebar,
 		viewState:       ViewNormal,
 		client:          apiClient,
 		sessions:        []client.Session{},
-		currentIndex:    0,
 		connected:       false,
 		quitting:        false,
+		width:           120,
+		height:          40,
 	}
 }
 
@@ -171,75 +172,68 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.viewState = ViewWorkflowSelect
 				return m, m.fetchWorkflows()
 			}
-		case "up":
-			if m.focus == FocusSessions && len(m.sessionsList.items) > 0 {
-				m.sessionsList.selected--
-				if m.sessionsList.selected < 0 {
-					m.sessionsList.selected = len(m.sessionsList.items) - 1
-				}
-				if selected := m.sessionsList.SelectedSession(); selected != nil {
+		case "up", "k":
+			if m.focus == FocusSidebar {
+				m.sidebar.SelectUp()
+				if selected := m.sidebar.SelectedSession(); selected != nil {
 					cmds = append(cmds, m.fetchInstance(selected.ID))
 				}
 			}
-		case "down":
-			if m.focus == FocusSessions && len(m.sessionsList.items) > 0 {
-				m.sessionsList.selected = (m.sessionsList.selected + 1) % len(m.sessionsList.items)
-				if selected := m.sessionsList.SelectedSession(); selected != nil {
+		case "down", "j":
+			if m.focus == FocusSidebar {
+				m.sidebar.SelectDown()
+				if selected := m.sidebar.SelectedSession(); selected != nil {
 					cmds = append(cmds, m.fetchInstance(selected.ID))
 				}
 			}
 		case "p":
-			if m.focus == FocusSessions {
-				if selected := m.sessionsList.SelectedSession(); selected != nil {
+			if m.focus == FocusSidebar {
+				if selected := m.sidebar.SelectedSession(); selected != nil {
 					cmds = append(cmds, m.handleControlAction(ControlMsg{Action: ActionPause, SessionID: selected.ID}))
 				}
 			}
 		case "r":
-			if m.focus == FocusSessions {
-				if selected := m.sessionsList.SelectedSession(); selected != nil {
+			if m.focus == FocusSidebar {
+				if selected := m.sidebar.SelectedSession(); selected != nil {
 					cmds = append(cmds, m.handleControlAction(ControlMsg{Action: ActionResume, SessionID: selected.ID}))
 				}
 			}
 		case "e":
-			if m.focus == FocusSessions {
-				if selected := m.sessionsList.SelectedSession(); selected != nil {
+			if m.focus == FocusSidebar {
+				if selected := m.sidebar.SelectedSession(); selected != nil {
 					cmds = append(cmds, m.handleControlAction(ControlMsg{Action: ActionEscalate, SessionID: selected.ID}))
 				}
 			}
-		case "k":
-			if m.focus == FocusSessions {
-				if selected := m.sessionsList.SelectedSession(); selected != nil {
+		case "s":
+			if m.focus == FocusSidebar {
+				if selected := m.sidebar.SelectedSession(); selected != nil {
 					cmds = append(cmds, m.handleControlAction(ControlMsg{Action: ActionSkip, SessionID: selected.ID}))
 				}
 			}
 		case "a":
-			if m.focus == FocusSessions {
-				if selected := m.sessionsList.SelectedSession(); selected != nil {
+			if m.focus == FocusSidebar {
+				if selected := m.sidebar.SelectedSession(); selected != nil {
 					cmds = append(cmds, m.handleControlAction(ControlMsg{Action: ActionAttach, SessionID: selected.ID}))
 				}
 			}
 		case "R":
-			if m.focus == FocusSessions {
-				if selected := m.sessionsList.SelectedSession(); selected != nil {
-					cmds = append(cmds, m.handleControlAction(ControlMsg{Action: ActionRefresh, SessionID: selected.ID}))
-				}
+			if m.focus == FocusSidebar {
+				cmds = append(cmds, m.fetchSessions())
 			}
 		}
 
 	case tea.WindowSizeMsg:
-		h, v := appStyle.GetFrameSize()
-		panelWidth := (msg.Width - h) / 2
-		panelHeight := (msg.Height - v - 20) / 3
-		m.sessionsList.SetSize(panelWidth, panelHeight)
-		m.stageView.SetSize(panelWidth, panelHeight)
-		m.workflowDiagram.SetSize(panelWidth, panelHeight)
-		m.logsPanel.SetSize(panelWidth, panelHeight*2)
-		m.outputViewer.SetSize(msg.Width-h, panelHeight)
+		m.width = msg.Width
+		m.height = msg.Height
+		m.handleResize()
 
 	case SessionListMsg:
-		m.sessionsList.items = msg.Sessions
-		if len(msg.Sessions) > 0 && m.sessionsList.selected >= 0 && m.sessionsList.selected < len(msg.Sessions) {
-			cmds = append(cmds, m.fetchInstance(msg.Sessions[m.sessionsList.selected].ID))
+		m.sidebar.SetSessions(msg.Sessions)
+		if len(msg.Sessions) > 0 {
+			selected := m.sidebar.SelectedSession()
+			if selected != nil {
+				cmds = append(cmds, m.fetchInstance(selected.ID))
+			}
 		}
 
 	case InstanceLoadedMsg:
@@ -260,11 +254,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case FocusMsg:
 		m.focus = msg.Area
-		m.sessionsList.SetFocused(m.focus == FocusSessions)
-		m.stageView.SetFocused(m.focus == FocusStage)
-		m.workflowDiagram.SetFocused(m.focus == FocusDiagram)
-		m.logsPanel.SetFocused(m.focus == FocusLogs)
-		m.outputViewer.SetFocused(m.focus == FocusOutput)
+		m.sidebar.SetFocused(m.focus == FocusSidebar)
+		m.stageView.SetFocused(m.focus == FocusMain)
+		m.workflowDiagram.SetFocused(m.focus == FocusMain)
+		m.logsPanel.SetFocused(m.focus == FocusMain)
+		m.outputViewer.SetFocused(m.focus == FocusMain)
 
 	case ControlMsg:
 		cmds = append(cmds, m.handleControlAction(msg))
@@ -303,12 +297,6 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	var cmd tea.Cmd
-	var err error
-	m.sessionsList, err = m.sessionsList.Update(msg)
-	if err != nil {
-		m.err = err
-	}
-
 	m.outputViewer, cmd = m.outputViewer.Update(msg)
 	cmds = append(cmds, cmd)
 
@@ -326,46 +314,37 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
+func (m *AppModel) handleResize() {
+	h, v := appStyle.GetFrameSize()
+	contentW := m.width - h
+	contentH := m.height - v - 4
+
+	sbW := min(sidebarWidth, contentW/4)
+	mainW := contentW - sbW - 3
+
+	m.sidebar.SetSize(sbW, contentH)
+
+	topHalfH := contentH / 2
+	bottomHalfH := contentH - topHalfH - 2
+
+	m.workflowDiagram.SetSize(mainW, topHalfH-4)
+	m.stageView.SetSize(mainW, 8)
+	m.logsPanel.SetSize(mainW, bottomHalfH-4)
+	m.outputViewer.SetSize(mainW, 6)
+}
+
 func (m *AppModel) cycleFocus() {
 	switch m.focus {
-	case FocusSessions:
-		m.focus = FocusStage
-	case FocusStage:
-		m.focus = FocusDiagram
-	case FocusDiagram:
-		m.focus = FocusLogs
-	case FocusLogs:
-		m.focus = FocusOutput
-	case FocusOutput:
-		m.focus = FocusSessions
+	case FocusSidebar:
+		m.focus = FocusMain
+	case FocusMain:
+		m.focus = FocusSidebar
 	}
-
-	m.sessionsList.SetFocused(m.focus == FocusSessions)
-	m.stageView.SetFocused(m.focus == FocusStage)
-	m.workflowDiagram.SetFocused(m.focus == FocusDiagram)
-	m.logsPanel.SetFocused(m.focus == FocusLogs)
-	m.outputViewer.SetFocused(m.focus == FocusOutput)
+	m.sidebar.SetFocused(m.focus == FocusSidebar)
 }
 
 func (m *AppModel) cycleFocusBack() {
-	switch m.focus {
-	case FocusSessions:
-		m.focus = FocusOutput
-	case FocusOutput:
-		m.focus = FocusLogs
-	case FocusLogs:
-		m.focus = FocusDiagram
-	case FocusDiagram:
-		m.focus = FocusStage
-	case FocusStage:
-		m.focus = FocusSessions
-	}
-
-	m.sessionsList.SetFocused(m.focus == FocusSessions)
-	m.stageView.SetFocused(m.focus == FocusStage)
-	m.workflowDiagram.SetFocused(m.focus == FocusDiagram)
-	m.logsPanel.SetFocused(m.focus == FocusLogs)
-	m.outputViewer.SetFocused(m.focus == FocusOutput)
+	m.cycleFocus()
 }
 
 func (m *AppModel) handleWSMessage(msg client.WSMessage) tea.Cmd {
@@ -378,18 +357,18 @@ func (m *AppModel) handleWSMessage(msg client.WSMessage) tea.Cmd {
 		if msg.Payload != nil {
 			m.logsPanel.AddWSPayload(msg.Payload)
 		}
-		if selected := m.sessionsList.SelectedSession(); selected != nil {
+		if selected := m.sidebar.SelectedSession(); selected != nil {
 			return m.fetchInstance(selected.ID)
 		}
 	case "stage:completed":
 		if msg.Payload != nil {
 			m.logsPanel.AddWSPayload(msg.Payload)
 		}
-		if selected := m.sessionsList.SelectedSession(); selected != nil {
+		if selected := m.sidebar.SelectedSession(); selected != nil {
 			return m.fetchInstance(selected.ID)
 		}
 	case "stage:transition", "workflow:progress":
-		if selected := m.sessionsList.SelectedSession(); selected != nil {
+		if selected := m.sidebar.SelectedSession(); selected != nil {
 			return m.fetchInstance(selected.ID)
 		}
 	case "session:started", "session:status":
@@ -405,7 +384,7 @@ func (m AppModel) View() string {
 
 	switch m.viewState {
 	case ViewWorkflowSelect:
-		header := lipgloss.NewStyle().Bold(true).Render("BABYSITTER TUI") + "  " +
+		header := styles.Title.Render("BABYSITTER") + "  " +
 			styles.Muted.Render("[Enter] Select  [Esc] Cancel  [q] Quit")
 		return appStyle.Render(
 			lipgloss.JoinVertical(lipgloss.Left,
@@ -416,7 +395,7 @@ func (m AppModel) View() string {
 		)
 
 	case ViewNewSession:
-		header := lipgloss.NewStyle().Bold(true).Render("BABYSITTER TUI") + "  " +
+		header := styles.Title.Render("BABYSITTER") + "  " +
 			styles.Muted.Render("[Enter] Start  [Esc] Cancel  [q] Quit")
 		return appStyle.Render(
 			lipgloss.JoinVertical(lipgloss.Left,
@@ -429,41 +408,49 @@ func (m AppModel) View() string {
 
 	var errView string
 	if m.err != nil {
-		errView = lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Render(
-			fmt.Sprintf("Error: %v", m.err))
+		errView = styles.StatusFailed.Render(fmt.Sprintf("Error: %v", m.err))
 	}
 
-	sessionsPanel := m.sessionsList.View()
-	stagePanel := m.stageView.View()
-	diagramPanel := m.workflowDiagram.View()
-	logsPanel := m.logsPanel.View()
-	outputPanel := m.outputViewer.View()
+	sidebar := m.sidebar.View()
 
-	leftColumn := lipgloss.JoinVertical(lipgloss.Left,
-		sessionsPanel,
+	diagramPanel := m.workflowDiagram.View()
+	stagePanel := m.stageView.View()
+	logsPanel := m.logsPanel.View()
+
+	topSection := lipgloss.JoinVertical(lipgloss.Left,
+		diagramPanel,
 		"",
 		stagePanel,
-		"",
-		diagramPanel,
 	)
 
-	rightColumn := lipgloss.JoinVertical(lipgloss.Left,
+	bottomSection := lipgloss.JoinVertical(lipgloss.Left,
 		logsPanel,
-		"",
-		outputPanel,
 	)
 
-	panels := lipgloss.JoinHorizontal(lipgloss.Top, leftColumn, "  ", rightColumn)
+	mainContent := lipgloss.JoinVertical(lipgloss.Left,
+		topSection,
+		"",
+		bottomSection,
+	)
 
-	header := lipgloss.NewStyle().Bold(true).Render("BABYSITTER TUI")
+	div := lipgloss.NewStyle().Foreground(styles.BorderNormal).Render("│")
 
-	helpBar := styles.KeyHint.Render(m.sessionsList.HelpText())
+	layout := lipgloss.JoinHorizontal(lipgloss.Top,
+		sidebar,
+		" ",
+		div,
+		" ",
+		mainContent,
+	)
+
+	header := styles.Title.Render("BABYSITTER")
+	helpBar := styles.KeyHint.Render(m.sidebar.HelpText())
 
 	return appStyle.Render(
 		lipgloss.JoinVertical(lipgloss.Left,
 			header,
 			"",
-			panels,
+			layout,
 			"",
 			helpBar,
 			errView,

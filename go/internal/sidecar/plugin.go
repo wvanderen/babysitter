@@ -129,14 +129,14 @@ func (p *BabysitterPlugin) initCommands() {
 			ID:   "babysitter.focus.sessions",
 			Name: "Focus Sessions Panel",
 			Handler: func() tea.Cmd {
-				return p.setFocus(tui.FocusSessions)
+				return p.setFocus(tui.FocusSidebar)
 			},
 		},
 		{
 			ID:   "babysitter.focus.output",
 			Name: "Focus Output Panel",
 			Handler: func() tea.Cmd {
-				return p.setFocus(tui.FocusOutput)
+				return p.setFocus(tui.FocusMain)
 			},
 		},
 	}

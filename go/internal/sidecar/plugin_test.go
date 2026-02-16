@@ -158,8 +158,8 @@ func TestFocusCommand(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected tui.FocusMsg, got %T", msg)
 	}
-	if focusMsg.Area != tui.FocusOutput {
-		t.Errorf("expected FocusOutput, got %v", focusMsg.Area)
+	if focusMsg.Area != tui.FocusMain {
+		t.Errorf("expected FocusMain, got %v", focusMsg.Area)
 	}
 }
 
