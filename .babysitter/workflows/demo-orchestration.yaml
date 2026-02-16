@@ -18,7 +18,8 @@ stages:
     validation:
       - type: file_exists
         path: /tmp/babysitter-demo/data.json
-      - type: output_contains
+      - type: file_contains
+        path: /tmp/babysitter-demo/data.json
         pattern: "slideshow"
     on_success: process_data
     on_failure: retry_fetch
@@ -28,17 +29,19 @@ stages:
     on_success: fetch_data
 
   - id: process_data
-    type: agent
-    prompt_template: |
-      Analyze the JSON data in /tmp/babysitter-demo/data.json
-      Create a summary report at /tmp/babysitter-demo/summary.txt
-      Include the slideshow title and author information.
-    timeout: 5m
-    max_retries: 2
+    type: action
+    command: |
+      echo "Summary Report" > /tmp/babysitter-demo/summary.txt && \
+      echo "==============" >> /tmp/babysitter-demo/summary.txt && \
+      cat /tmp/babysitter-demo/data.json | grep -o '"title": "[^"]*"' | head -1 >> /tmp/babysitter-demo/summary.txt && \
+      cat /tmp/babysitter-demo/data.json | grep -o '"author": "[^"]*"' >> /tmp/babysitter-demo/summary.txt && \
+      echo "Processing complete"
+    timeout: 30s
     validation:
       - type: file_exists
         path: /tmp/babysitter-demo/summary.txt
-      - type: output_contains
+      - type: file_contains
+        path: /tmp/babysitter-demo/summary.txt
         pattern: "title"
     on_success: validate_results
     on_failure: handle_processing_error

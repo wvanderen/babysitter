@@ -105,22 +105,26 @@ defmodule Babysitter.StageExecutor do
   def execute_action(stage, session_id, opts \\ [])
 
   def execute_action(%Stage{type: :action} = stage, session_id, opts) do
+    require Logger
     started_at = DateTime.utc_now()
     poll_interval = Keyword.get(opts, :poll_interval, @default_poll_interval)
     max_wait = Keyword.get(opts, :max_wait, @default_max_wait)
     env = Keyword.get(opts, :env, [])
 
     with {:ok, session} <- get_session(session_id),
-         {:ok, command} <- build_action_command(stage, env) do
+         {:ok, command, marker_id} <- build_action_command(stage, env) do
+      Logger.debug("Executing action #{stage.id}: #{command}")
       :ok = Tmux.send_keys(session.tmux_name, command)
 
       case wait_for_command_completion(
              session.tmux_name,
              started_at,
              poll_interval,
-             max_wait
+             max_wait,
+             marker_id
            ) do
         {:ok, {output, exit_code}} ->
+          Logger.debug("Action #{stage.id} completed with exit_code=#{exit_code}")
           finished_at = DateTime.utc_now()
           Session.append_output(session_id, output)
 
@@ -335,6 +339,9 @@ defmodule Babysitter.StageExecutor do
         result
 
       {:error, errors} ->
+        require Logger
+        Logger.warning("Stage #{result.stage_id} validation failed: #{inspect(errors)}")
+
         validation_result = %Babysitter.Validation.Result{
           type: :custom,
           status: :fail,
@@ -379,8 +386,12 @@ defmodule Babysitter.StageExecutor do
   defp build_action_command(%Stage{command: command}, env)
        when is_binary(command) and command != "" do
     env_prefix = build_env_prefix(env)
-    wrapped_command = "#{env_prefix}(#{command}); RET=$?; echo \"BABYSITTER_EXIT_${RET}_CODE\""
-    {:ok, wrapped_command}
+    marker_id = :crypto.strong_rand_bytes(4) |> Base.encode16(case: :lower)
+
+    wrapped_command =
+      "#{env_prefix}(#{command}); RET=$?; echo \"BABYSITTER_EXIT_${RET}_CODE_#{marker_id}\""
+
+    {:ok, wrapped_command, marker_id}
   end
 
   defp build_action_command(%Stage{command: nil}, _env) do
@@ -421,12 +432,12 @@ defmodule Babysitter.StageExecutor do
 
   defp escape_shell_value(value), do: to_string(value)
 
-  defp wait_for_command_completion(tmux_name, started_at, poll_interval, max_wait) do
+  defp wait_for_command_completion(tmux_name, started_at, poll_interval, max_wait, marker_id) do
     deadline = DateTime.add(started_at, max_wait, :millisecond)
-    do_wait_for_command(tmux_name, deadline, poll_interval, nil)
+    do_wait_for_command(tmux_name, deadline, poll_interval, marker_id, nil)
   end
 
-  defp do_wait_for_command(tmux_name, deadline, poll_interval, _last_output) do
+  defp do_wait_for_command(tmux_name, deadline, poll_interval, marker_id, _last_output) do
     if DateTime.compare(DateTime.utc_now(), deadline) == :gt do
       case Tmux.capture_pane(tmux_name) do
         output when is_binary(output) -> {:timeout, output}
@@ -437,12 +448,12 @@ defmodule Babysitter.StageExecutor do
 
       case Tmux.capture_pane(tmux_name) do
         output when is_binary(output) ->
-          case extract_exit_code(output) do
+          case extract_exit_code(output, marker_id) do
             {:ok, exit_code, clean_output} ->
               {:ok, {clean_output, exit_code}}
 
             :not_found ->
-              do_wait_for_command(tmux_name, deadline, poll_interval, output)
+              do_wait_for_command(tmux_name, deadline, poll_interval, marker_id, output)
           end
 
         {:error, _} = error ->
@@ -451,22 +462,17 @@ defmodule Babysitter.StageExecutor do
     end
   end
 
-  @exit_code_marker "BABYSITTER_EXIT_"
-  @exit_code_regex ~r/BABYSITTER_EXIT_(\d+)_CODE\b/
+  defp extract_exit_code(output, marker_id) do
+    regex = ~r/BABYSITTER_EXIT_(\d+)_CODE_#{marker_id}\b/
 
-  defp extract_exit_code(output) do
-    if String.contains?(output, @exit_code_marker) do
-      case Regex.run(@exit_code_regex, output) do
-        [full_match, exit_code_str] ->
-          exit_code = String.to_integer(exit_code_str)
-          clean_output = String.replace(output, full_match, "")
-          {:ok, exit_code, clean_output}
+    case Regex.run(regex, output) do
+      [full_match, exit_code_str] ->
+        exit_code = String.to_integer(exit_code_str)
+        clean_output = String.replace(output, full_match, "")
+        {:ok, exit_code, clean_output}
 
-        _ ->
-          :not_found
-      end
-    else
-      :not_found
+      _ ->
+        :not_found
     end
   end
 

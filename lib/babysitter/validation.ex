@@ -12,19 +12,23 @@ defmodule Babysitter.Validation do
           | :output_matches
           | :exit_code
           | :output_equals
+          | :file_exists
+          | :file_contains
           | :custom
 
   @type t :: %__MODULE__{
           type: validation_type(),
           pattern: String.t() | Regex.t() | non_neg_integer() | function(),
+          path: String.t() | nil,
           negate: boolean(),
           error_message: String.t() | nil
         }
 
-  @enforce_keys [:type, :pattern]
+  @enforce_keys [:type]
   defstruct [
     :type,
-    :pattern,
+    :path,
+    pattern: nil,
     negate: false,
     error_message: nil
   ]
@@ -84,6 +88,33 @@ defmodule Babysitter.Validation do
   end
 
   @doc """
+  Create a validation that checks if a file exists.
+  """
+  @spec file_exists(String.t(), keyword()) :: t()
+  def file_exists(path, opts \\ []) do
+    %__MODULE__{
+      type: :file_exists,
+      path: path,
+      negate: Keyword.get(opts, :negate, false),
+      error_message: Keyword.get(opts, :error_message)
+    }
+  end
+
+  @doc """
+  Create a validation that checks if a file contains a pattern.
+  """
+  @spec file_contains(String.t(), String.t(), keyword()) :: t()
+  def file_contains(path, pattern, opts \\ []) do
+    %__MODULE__{
+      type: :file_contains,
+      path: path,
+      pattern: pattern,
+      negate: Keyword.get(opts, :negate, false),
+      error_message: Keyword.get(opts, :error_message)
+    }
+  end
+
+  @doc """
   Run the validation against output and exit code.
   """
   @spec run(t(), String.t(), non_neg_integer()) :: :ok | {:error, String.t()}
@@ -137,6 +168,32 @@ defmodule Babysitter.Validation do
   defp do_validate(%__MODULE__{type: :custom, pattern: func}, output, exit_code)
        when is_function(func, 2) do
     func.(output, exit_code)
+  end
+
+  defp do_validate(%__MODULE__{type: :file_exists, path: path} = v, _output, _exit_code) do
+    if File.exists?(path) do
+      :ok
+    else
+      error(v, "file does not exist: #{path}")
+    end
+  end
+
+  defp do_validate(
+         %__MODULE__{type: :file_contains, path: path, pattern: pattern} = v,
+         _output,
+         _exit_code
+       ) do
+    with true <- File.exists?(path),
+         {:ok, content} <- File.read(path) do
+      if String.contains?(content, pattern) do
+        :ok
+      else
+        error(v, "file #{path} does not contain '#{pattern}'")
+      end
+    else
+      false -> error(v, "file does not exist: #{path}")
+      {:error, reason} -> error(v, "failed to read file #{path}: #{inspect(reason)}")
+    end
   end
 
   defp do_validate(%__MODULE__{type: type} = v, _output, _exit_code) do

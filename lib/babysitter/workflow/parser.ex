@@ -303,6 +303,25 @@ defmodule Babysitter.Workflow.Parser do
     }
   end
 
+  defp parse_validation(%{type: :file_exists} = v) do
+    %Validation{
+      type: :file_exists,
+      path: v[:path],
+      negate: v[:negate] || false,
+      error_message: v[:error_message]
+    }
+  end
+
+  defp parse_validation(%{type: :file_contains} = v) do
+    %Validation{
+      type: :file_contains,
+      path: v[:path],
+      pattern: to_string(v[:pattern]),
+      negate: v[:negate] || false,
+      error_message: v[:error_message]
+    }
+  end
+
   defp parse_validation(%{type: type} = v) when is_binary(type) do
     parse_validation(%{v | type: String.to_atom(type)})
   end
