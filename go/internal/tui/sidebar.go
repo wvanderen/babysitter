@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/wvanderen/babysitter/go/internal/styles"
+	"github.com/wvanderen/babysitter/go/internal/ui"
 )
 
 type Sidebar struct {
@@ -124,10 +125,7 @@ func (s Sidebar) View() string {
 				statusIcon = styles.StatusFailed.Render("✗")
 			}
 
-			id := session.ID
-			if len(id) > s.width-6 {
-				id = id[:s.width-9] + "..."
-			}
+			id := ui.TruncateString(session.ID, s.width-6)
 
 			line := style.Render("  " + statusIcon + " " + id)
 			lines = append(lines, line)

@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/wvanderen/babysitter/go/internal/client"
 	"github.com/wvanderen/babysitter/go/internal/styles"
+	"github.com/wvanderen/babysitter/go/internal/ui"
 )
 
 type StageView struct {
@@ -112,7 +113,7 @@ func (s *StageView) renderStageStatus(item client.ExecutionHistoryItem) string {
 	}
 
 	if item.Error != "" {
-		errorLine := styles.StatusFailed.Render(fmt.Sprintf("    Error: %s", truncateString(item.Error, 60)))
+		errorLine := styles.StatusFailed.Render(fmt.Sprintf("    Error: %s", ui.TruncateString(item.Error, 60)))
 		lines = append(lines, errorLine)
 	}
 
@@ -168,7 +169,7 @@ func (s *StageView) renderHistoryItem(item client.ExecutionHistoryItem, index in
 	line := strings.Join(parts, " ")
 
 	if item.Error != "" {
-		line += "\n" + styles.Muted.Foreground(styles.Error).Render(fmt.Sprintf("      └─ %s", truncateString(item.Error, 50)))
+		line += "\n" + styles.StatusFailed.Render(fmt.Sprintf("      └─ %s", ui.TruncateString(item.Error, 50)))
 	}
 
 	return line
@@ -235,13 +236,6 @@ func (s *StageView) SetSize(width, height int) {
 func (s *StageView) Clear() {
 	s.instance = nil
 	s.history = []client.ExecutionHistoryItem{}
-}
-
-func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen-3] + "..."
 }
 
 func FormatStageProgress(instance *client.WorkflowInstance) string {

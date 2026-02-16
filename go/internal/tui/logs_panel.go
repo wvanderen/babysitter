@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/wvanderen/babysitter/go/internal/client"
 	"github.com/wvanderen/babysitter/go/internal/styles"
+	"github.com/wvanderen/babysitter/go/internal/ui"
 )
 
 type LogsPanel struct {
@@ -211,7 +212,7 @@ func (l *LogsPanel) renderLogEntry(entry LogEntry, index int) string {
 			style = lipgloss.NewStyle().Foreground(styles.Warning)
 		}
 		lines = append(lines, fmt.Sprintf("    %s:", label))
-		lines = append(lines, style.Render(fmt.Sprintf("      %s", truncateString(entry.Input, 80))))
+		lines = append(lines, style.Render(fmt.Sprintf("      %s", ui.TruncateString(entry.Input, 80))))
 	}
 
 	if entry.Output != "" {
@@ -219,7 +220,7 @@ func (l *LogsPanel) renderLogEntry(entry LogEntry, index int) string {
 		outputLines := strings.Split(entry.Output, "\n")
 		for _, ol := range outputLines {
 			if ol != "" {
-				lines = append(lines, fmt.Sprintf("      %s", truncateString(ol, 80)))
+				lines = append(lines, fmt.Sprintf("      %s", ui.TruncateString(ol, 80)))
 			}
 		}
 	}
@@ -245,7 +246,7 @@ func (l *LogsPanel) renderLogEntry(entry LogEntry, index int) string {
 	}
 
 	if entry.Error != "" {
-		lines = append(lines, styles.StatusFailed.Render(fmt.Sprintf("    Error: %s", truncateString(entry.Error, 80))))
+		lines = append(lines, styles.StatusFailed.Render(fmt.Sprintf("    Error: %s", ui.TruncateString(entry.Error, 80))))
 	}
 
 	if entry.DurationMs > 0 {
