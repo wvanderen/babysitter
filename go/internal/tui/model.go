@@ -228,6 +228,17 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.handleResize()
 
+	case tea.MouseMsg:
+		action := m.sidebar.HandleMouse(msg)
+		if action != "" {
+			if len(action) > 7 && action[:7] == "select:" {
+				sessionID := action[7:]
+				cmds = append(cmds, m.fetchInstance(sessionID))
+			}
+			m.focus = FocusSidebar
+			m.sidebar.SetFocused(true)
+		}
+
 	case SessionListMsg:
 		m.sidebar.SetSessions(msg.Sessions)
 		if len(msg.Sessions) > 0 {
@@ -412,7 +423,10 @@ func (m AppModel) View() string {
 		errView = styles.StatusFailed.Render(fmt.Sprintf("Error: %v", m.err))
 	}
 
-	sidebar := m.sidebar.View()
+	_, v := appStyle.GetFrameSize()
+	sidebarY := v + 2
+	m.sidebar.SetRenderPosition(sidebarY)
+	sidebar := m.sidebar.ViewWithHitRegions()
 
 	diagramPanel := m.workflowDiagram.View()
 	stagePanel := m.stageView.View()
