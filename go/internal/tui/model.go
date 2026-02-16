@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/wvanderen/babysitter/go/internal/client"
+	"github.com/wvanderen/babysitter/go/internal/keymap"
 	"github.com/wvanderen/babysitter/go/internal/styles"
 )
 
@@ -444,7 +445,13 @@ func (m AppModel) View() string {
 	)
 
 	header := styles.Title.Render("BABYSITTER")
-	helpBar := styles.KeyHint.Render(m.sidebar.HelpText())
+
+	context := "main"
+	if m.focus == FocusSidebar {
+		context = "sidebar"
+	}
+	cmds := keymap.CommandsForContext(context)
+	helpBar := styles.KeyHint.Render(keymap.RenderHints(cmds, m.width-4))
 
 	return appStyle.Render(
 		lipgloss.JoinVertical(lipgloss.Left,
