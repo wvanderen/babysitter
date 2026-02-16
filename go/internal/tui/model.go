@@ -17,7 +17,8 @@ type FocusArea int
 
 const (
 	FocusSidebar FocusArea = iota
-	FocusMain
+	FocusWorkflowDiagram
+	FocusLogsPanel
 )
 
 type ViewState int
@@ -36,7 +37,6 @@ var (
 
 type AppModel struct {
 	sidebar         Sidebar
-	stageView       StageView
 	workflowDiagram WorkflowDiagram
 	logsPanel       LogsPanel
 	outputViewer    OutputViewer
@@ -59,7 +59,6 @@ type AppModel struct {
 func NewAppModel(apiClient *client.Client) AppModel {
 	return AppModel{
 		sidebar:         NewSidebar(),
-		stageView:       NewStageView(),
 		workflowDiagram: NewWorkflowDiagram(),
 		logsPanel:       NewLogsPanel(),
 		outputViewer:    NewOutputViewer(),
@@ -179,6 +178,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if selected := m.sidebar.SelectedSession(); selected != nil {
 					cmds = append(cmds, m.fetchInstance(selected.ID))
 				}
+			} else if m.focus == FocusLogsPanel {
+				m.logsPanel.SelectUp()
 			}
 		case "down", "j":
 			if m.focus == FocusSidebar {
@@ -186,6 +187,12 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if selected := m.sidebar.SelectedSession(); selected != nil {
 					cmds = append(cmds, m.fetchInstance(selected.ID))
 				}
+			} else if m.focus == FocusLogsPanel {
+				m.logsPanel.SelectDown()
+			}
+		case "enter", " ":
+			if m.focus == FocusLogsPanel {
+				m.logsPanel.ToggleExpand()
 			}
 		case "p":
 			if m.focus == FocusSidebar {
@@ -251,7 +258,6 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case InstanceLoadedMsg:
 		m.currentInstance = msg.Instance
 		m.currentWorkflow = msg.Workflow
-		m.stageView.SetInstance(msg.Instance)
 		m.workflowDiagram.SetWorkflow(msg.Workflow)
 		m.workflowDiagram.SetInstance(msg.Instance)
 		m.logsPanel.SetInstance(msg.Instance)
@@ -267,10 +273,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case FocusMsg:
 		m.focus = msg.Area
 		m.sidebar.SetFocused(m.focus == FocusSidebar)
-		m.stageView.SetFocused(m.focus == FocusMain)
-		m.workflowDiagram.SetFocused(m.focus == FocusMain)
-		m.logsPanel.SetFocused(m.focus == FocusMain)
-		m.outputViewer.SetFocused(m.focus == FocusMain)
+		m.workflowDiagram.SetFocused(m.focus == FocusWorkflowDiagram)
+		m.logsPanel.SetFocused(m.focus == FocusLogsPanel)
+		m.outputViewer.SetFocused(m.focus == FocusLogsPanel)
 
 	case ControlMsg:
 		cmds = append(cmds, m.handleControlAction(msg))
@@ -337,22 +342,25 @@ func (m *AppModel) handleResize() {
 	m.sidebar.SetSize(sbW, contentH)
 
 	topHalfH := contentH / 2
-	bottomHalfH := contentH - topHalfH - 2
+	bottomHalfH := contentH - topHalfH
 
-	m.workflowDiagram.SetSize(mainW, topHalfH-4)
-	m.stageView.SetSize(mainW, 8)
-	m.logsPanel.SetSize(mainW, bottomHalfH-4)
+	m.workflowDiagram.SetSize(mainW, topHalfH)
+	m.logsPanel.SetSize(mainW, bottomHalfH)
 	m.outputViewer.SetSize(mainW, 6)
 }
 
 func (m *AppModel) cycleFocus() {
 	switch m.focus {
 	case FocusSidebar:
-		m.focus = FocusMain
-	case FocusMain:
+		m.focus = FocusWorkflowDiagram
+	case FocusWorkflowDiagram:
+		m.focus = FocusLogsPanel
+	case FocusLogsPanel:
 		m.focus = FocusSidebar
 	}
 	m.sidebar.SetFocused(m.focus == FocusSidebar)
+	m.workflowDiagram.SetFocused(m.focus == FocusWorkflowDiagram)
+	m.logsPanel.SetFocused(m.focus == FocusLogsPanel)
 }
 
 func (m *AppModel) cycleFocusBack() {
@@ -429,32 +437,16 @@ func (m AppModel) View() string {
 	sidebar := m.sidebar.ViewWithHitRegions()
 
 	diagramPanel := m.workflowDiagram.View()
-	stagePanel := m.stageView.View()
 	logsPanel := m.logsPanel.View()
 
-	topSection := lipgloss.JoinVertical(lipgloss.Left,
+	mainContent := lipgloss.JoinVertical(lipgloss.Left,
 		diagramPanel,
-		"",
-		stagePanel,
-	)
-
-	bottomSection := lipgloss.JoinVertical(lipgloss.Left,
 		logsPanel,
 	)
 
-	mainContent := lipgloss.JoinVertical(lipgloss.Left,
-		topSection,
-		"",
-		bottomSection,
-	)
-
-	div := lipgloss.NewStyle().Foreground(styles.BorderNormal).Render("│")
-
 	layout := lipgloss.JoinHorizontal(lipgloss.Top,
 		sidebar,
-		" ",
-		div,
-		" ",
+		"  ",
 		mainContent,
 	)
 
@@ -465,6 +457,11 @@ func (m AppModel) View() string {
 		context = "sidebar"
 	}
 	cmds := keymap.CommandsForContext(context)
+	if m.focus == FocusLogsPanel {
+		cmds = append(cmds, keymap.Command{ID: "logs-up", Name: "Up", Key: "↑", Priority: 2})
+		cmds = append(cmds, keymap.Command{ID: "logs-down", Name: "Down", Key: "↓", Priority: 2})
+		cmds = append(cmds, keymap.Command{ID: "logs-expand", Name: "Expand", Key: "Enter", Priority: 3})
+	}
 	helpBar := styles.KeyHint.Render(keymap.RenderHints(cmds, m.width-4))
 
 	return appStyle.Render(

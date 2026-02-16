@@ -196,13 +196,6 @@ func (s *StageView) renderRetryInfo() string {
 }
 
 func (s StageView) View() string {
-	boxStyle := styles.PanelInactive
-	if s.focused {
-		boxStyle = styles.PanelActive
-	}
-
-	title := " Stage Progress "
-
 	var sections []string
 	sections = append(sections, s.renderCurrentStage())
 
@@ -218,10 +211,7 @@ func (s StageView) View() string {
 
 	content := strings.Join(sections, "\n")
 
-	return lipgloss.JoinVertical(lipgloss.Left,
-		styles.PanelHeader.Render(title),
-		boxStyle.Render(content),
-	)
+	return styles.RenderPanel(" Stage Progress ", content, s.focused, s.width, s.height)
 }
 
 func (s *StageView) SetFocused(focused bool) {

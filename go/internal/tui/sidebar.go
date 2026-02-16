@@ -74,7 +74,7 @@ func (s *Sidebar) SelectDown() {
 }
 
 func (s *Sidebar) ensureVisible() {
-	visibleItems := s.height - 4
+	visibleItems := s.height - 6
 	if visibleItems < 1 {
 		visibleItems = 1
 	}
@@ -93,16 +93,9 @@ func (s *Sidebar) ensureVisible() {
 }
 
 func (s Sidebar) View() string {
-	boxStyle := styles.PanelInactive
-	if s.focused {
-		boxStyle = styles.PanelActive
-	}
-
 	var lines []string
-	lines = append(lines, styles.PanelHeader.Render(" Sessions "))
-	lines = append(lines, "")
 
-	visibleItems := s.height - 4
+	visibleItems := s.height - 6
 	if visibleItems < 1 {
 		visibleItems = 1
 	}
@@ -137,12 +130,12 @@ func (s Sidebar) View() string {
 		}
 	}
 
-	for len(lines) < s.height-2 {
+	for len(lines) < visibleItems {
 		lines = append(lines, "")
 	}
 
 	content := strings.Join(lines, "\n")
-	return boxStyle.Render(content)
+	return styles.RenderPanel(" Sessions ", content, s.focused, s.width, s.height)
 }
 
 func (s Sidebar) HelpText() string {
@@ -159,16 +152,9 @@ func (s *Sidebar) SetRenderPosition(y int) {
 func (s *Sidebar) ViewWithHitRegions() string {
 	s.hitMap.Clear()
 
-	boxStyle := styles.PanelInactive
-	if s.focused {
-		boxStyle = styles.PanelActive
-	}
-
 	var lines []string
-	lines = append(lines, styles.PanelHeader.Render(" Sessions "))
-	lines = append(lines, "")
 
-	visibleItems := s.height - 4
+	visibleItems := s.height - 6
 	if visibleItems < 1 {
 		visibleItems = 1
 	}
@@ -208,12 +194,12 @@ func (s *Sidebar) ViewWithHitRegions() string {
 		}
 	}
 
-	for len(lines) < s.height-2 {
+	for len(lines) < visibleItems {
 		lines = append(lines, "")
 	}
 
 	content := strings.Join(lines, "\n")
-	return boxStyle.Render(content)
+	return styles.RenderPanel(" Sessions ", content, s.focused, s.width, s.height)
 }
 
 func (s *Sidebar) HandleMouse(msg tea.MouseMsg) string {

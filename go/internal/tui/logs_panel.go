@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/wvanderen/babysitter/go/internal/client"
@@ -14,14 +13,14 @@ import (
 )
 
 type LogsPanel struct {
-	viewport      viewport.Model
-	logs          []LogEntry
-	instance      *client.WorkflowInstance
-	selectedStage int
-	width         int
-	height        int
-	focused       bool
-	expanded      bool
+	logs        []LogEntry
+	instance    *client.WorkflowInstance
+	selectedIdx int
+	expanded    map[int]bool
+	width       int
+	height      int
+	focused     bool
+	scrollOff   int
 }
 
 type LogEntry struct {
@@ -29,6 +28,7 @@ type LogEntry struct {
 	StageID    string
 	StageType  string
 	EventType  string
+	Status     string
 	Input      string
 	Output     string
 	Error      string
@@ -43,13 +43,10 @@ type ValidationResult struct {
 }
 
 func NewLogsPanel() LogsPanel {
-	vp := viewport.New(80, 20)
-	vp.SetContent("")
-
 	return LogsPanel{
-		viewport:      vp,
-		logs:          []LogEntry{},
-		selectedStage: 0,
+		logs:        []LogEntry{},
+		expanded:    make(map[int]bool),
+		selectedIdx: 0,
 	}
 }
 
@@ -62,7 +59,6 @@ func (l *LogsPanel) SetInstance(instance *client.WorkflowInstance) {
 	if instance != nil {
 		l.logs = l.buildLogsFromHistory(instance.ExecutionHistory)
 	}
-	l.updateViewport()
 }
 
 func (l *LogsPanel) buildLogsFromHistory(history []client.ExecutionHistoryItem) []LogEntry {
@@ -72,6 +68,7 @@ func (l *LogsPanel) buildLogsFromHistory(history []client.ExecutionHistoryItem) 
 		entry := LogEntry{
 			StageID:    item.StageID,
 			StageType:  item.StageType,
+			Status:     item.Status,
 			Output:     item.Output,
 			Error:      item.Error,
 			DurationMs: item.DurationMs,
@@ -133,7 +130,6 @@ func (l *LogsPanel) parseValidations(validations []interface{}) []ValidationResu
 
 func (l *LogsPanel) AddLogEntry(entry LogEntry) {
 	l.logs = append(l.logs, entry)
-	l.updateViewport()
 }
 
 func (l *LogsPanel) AddWSPayload(payload *client.WSPayload) {
@@ -145,6 +141,7 @@ func (l *LogsPanel) AddWSPayload(payload *client.WSPayload) {
 		StageID:    payload.StageID,
 		StageType:  payload.Type,
 		EventType:  payload.Type,
+		Status:     "completed",
 		Input:      payload.Command,
 		Output:     payload.Output,
 		Error:      payload.Error,
@@ -163,113 +160,284 @@ func (l *LogsPanel) AddWSPayload(payload *client.WSPayload) {
 	}
 
 	l.logs = append(l.logs, entry)
-	l.updateViewport()
 }
 
-func (l *LogsPanel) updateViewport() {
-	content := l.renderLogs()
-	l.viewport.SetContent(content)
-	l.viewport.GotoBottom()
-}
-
-func (l *LogsPanel) renderLogs() string {
+func (l *LogsPanel) SelectUp() {
 	if len(l.logs) == 0 {
-		return styles.Muted.Render("  No logs available")
+		return
 	}
-
-	var lines []string
-
-	for i, entry := range l.logs {
-		lines = append(lines, l.renderLogEntry(entry, i))
-		lines = append(lines, "")
+	l.selectedIdx--
+	if l.selectedIdx < 0 {
+		l.selectedIdx = len(l.logs) - 1
 	}
-
-	return strings.Join(lines, "\n")
+	l.ensureVisible()
 }
 
-func (l *LogsPanel) renderLogEntry(entry LogEntry, index int) string {
-	var lines []string
-
-	header := fmt.Sprintf("  [%d] %s", index+1, entry.StageID)
-	if entry.StageType != "" {
-		header += fmt.Sprintf(" (%s)", entry.StageType)
+func (l *LogsPanel) SelectDown() {
+	if len(l.logs) == 0 {
+		return
 	}
-	lines = append(lines, styles.Title.Render(header))
+	l.selectedIdx = (l.selectedIdx + 1) % len(l.logs)
+	l.ensureVisible()
+}
 
+func (l *LogsPanel) ToggleExpand() {
+	if len(l.logs) == 0 {
+		return
+	}
+	l.expanded[l.selectedIdx] = !l.expanded[l.selectedIdx]
+}
+
+func (l *LogsPanel) ensureVisible() {
+	visibleRows := l.visibleRowCount()
+	if visibleRows < 1 {
+		visibleRows = 1
+	}
+
+	if l.selectedIdx < l.scrollOff {
+		l.scrollOff = l.selectedIdx
+	}
+
+	selectedRowInViewport := 0
+	for i := 0; i < l.selectedIdx; i++ {
+		if l.expanded[i] {
+			selectedRowInViewport += l.expandedHeight(i)
+		} else {
+			selectedRowInViewport++
+		}
+	}
+
+	scrollOffRows := 0
+	for i := 0; i < l.scrollOff; i++ {
+		if l.expanded[i] {
+			scrollOffRows += l.expandedHeight(i)
+		} else {
+			scrollOffRows++
+		}
+	}
+
+	if selectedRowInViewport < scrollOffRows {
+		l.scrollOff = l.selectedIdx
+		scrollOffRows = 0
+		for i := 0; i < l.scrollOff; i++ {
+			if l.expanded[i] {
+				scrollOffRows += l.expandedHeight(i)
+			} else {
+				scrollOffRows++
+			}
+		}
+	}
+
+	if selectedRowInViewport >= scrollOffRows+visibleRows {
+		for l.scrollOff < l.selectedIdx {
+			l.scrollOff++
+			scrollOffRows = 0
+			for i := 0; i < l.scrollOff; i++ {
+				if l.expanded[i] {
+					scrollOffRows += l.expandedHeight(i)
+				} else {
+					scrollOffRows++
+				}
+			}
+			if scrollOffRows <= selectedRowInViewport && selectedRowInViewport < scrollOffRows+visibleRows {
+				break
+			}
+		}
+	}
+}
+
+func (l *LogsPanel) expandedHeight(idx int) int {
+	if !l.expanded[idx] {
+		return 1
+	}
+	if idx >= len(l.logs) {
+		return 1
+	}
+	entry := l.logs[idx]
+	lines := 4
+	if entry.Input != "" {
+		lines += 2 + min(3, len(strings.Split(entry.Input, "\n")))
+	}
+	if entry.Output != "" {
+		lines += 2 + min(5, len(strings.Split(entry.Output, "\n")))
+	}
+	if len(entry.Validation) > 0 {
+		lines += 2 + len(entry.Validation)
+	}
+	if entry.Error != "" {
+		lines += 2 + min(2, len(strings.Split(entry.Error, "\n")))
+	}
+	return lines
+}
+
+func (l *LogsPanel) visibleRowCount() int {
+	return l.height - 4
+}
+
+func (l LogsPanel) View() string {
+	if len(l.logs) == 0 {
+		content := styles.Muted.Render("  No logs available")
+		return styles.RenderPanel(" Detailed Logs ", content, l.focused, l.width, l.height)
+	}
+
+	var allRows []string
+	for i := 0; i < len(l.logs); i++ {
+		allRows = append(allRows, l.renderLogRow(i))
+	}
+
+	startRow := 0
+	for i := 0; i < l.scrollOff && i < len(l.logs); i++ {
+		if l.expanded[i] {
+			startRow += l.expandedHeight(i)
+		} else {
+			startRow++
+		}
+	}
+
+	visibleCount := l.visibleRowCount()
+	visibleRows := []string{}
+	rowCount := 0
+
+	for i := l.scrollOff; i < len(l.logs) && rowCount < visibleCount; i++ {
+		row := l.renderLogRow(i)
+		lines := strings.Split(row, "\n")
+		for _, line := range lines {
+			if rowCount >= visibleCount {
+				break
+			}
+			visibleRows = append(visibleRows, line)
+			rowCount++
+		}
+	}
+
+	content := strings.Join(visibleRows, "\n")
+	return styles.RenderPanel(" Detailed Logs ", content, l.focused, l.width, l.height)
+}
+
+func (l LogsPanel) renderLogRow(idx int) string {
+	entry := l.logs[idx]
+	isSelected := idx == l.selectedIdx
+	isExpanded := l.expanded[idx]
+
+	expandIcon := "▸"
+	if isExpanded {
+		expandIcon = "▾"
+	}
+
+	var statusIcon string
+	var statusStyle lipgloss.Style
+	switch entry.Status {
+	case "completed", "success":
+		statusIcon = "✓"
+		statusStyle = styles.StatusCompleted
+	case "failed", "failure":
+		statusIcon = "✗"
+		statusStyle = styles.StatusFailed
+	case "running", "active":
+		statusIcon = "●"
+		statusStyle = styles.StatusRunning
+	case "skipped":
+		statusIcon = "○"
+		statusStyle = styles.StatusSkipped
+	default:
+		statusIcon = "○"
+		statusStyle = styles.StatusPending
+	}
+
+	stageID := ui.TruncateString(entry.StageID, 20)
+	stageType := ""
+	if entry.StageType != "" {
+		stageType = styles.Muted.Render(fmt.Sprintf("[%s]", entry.StageType))
+	}
+
+	rowStyle := styles.ListItemNormal
+	if isSelected {
+		rowStyle = styles.ListItemSelected
+	}
+
+	var duration string
+	if entry.DurationMs > 0 {
+		duration = styles.Muted.Render(FormatDuration(entry.DurationMs))
+	}
+
+	header := fmt.Sprintf("  %s %s %s", expandIcon, statusStyle.Render(statusIcon), stageID)
+	if stageType != "" {
+		header += " " + stageType
+	}
+	if duration != "" {
+		header += " " + duration
+	}
+
+	header = rowStyle.Render(header)
+
+	if !isExpanded {
+		return header
+	}
+
+	var lines []string
+	lines = append(lines, header)
+
+	ts := ""
 	if !entry.Timestamp.IsZero() {
-		ts := entry.Timestamp.Format("15:04:05")
-		lines = append(lines, styles.Muted.Render(fmt.Sprintf("      %s", ts)))
+		ts = entry.Timestamp.Format("15:04:05")
+		lines = append(lines, styles.Muted.Render(fmt.Sprintf("      Time: %s", ts)))
 	}
 
 	if entry.Input != "" {
-		var label string
-		var style lipgloss.Style
+		label := "Input"
 		if entry.EventType == "prompt" || entry.StageType == "agent" {
 			label = "Prompt"
-			style = lipgloss.NewStyle().Foreground(styles.Accent)
-		} else {
-			label = "Command"
-			style = lipgloss.NewStyle().Foreground(styles.Warning)
 		}
-		lines = append(lines, fmt.Sprintf("    %s:", label))
-		lines = append(lines, style.Render(fmt.Sprintf("      %s", ui.TruncateString(entry.Input, 80))))
+		lines = append(lines, styles.Subtle.Render(fmt.Sprintf("      %s:", label)))
+		inputLines := strings.Split(entry.Input, "\n")
+		for i, il := range inputLines {
+			if i >= 3 {
+				lines = append(lines, styles.Muted.Render("      ..."))
+				break
+			}
+			lines = append(lines, styles.Code.Render(fmt.Sprintf("        %s", ui.TruncateString(il, l.width-14))))
+		}
 	}
 
 	if entry.Output != "" {
-		lines = append(lines, "    Output:")
+		lines = append(lines, styles.Subtle.Render("      Output:"))
 		outputLines := strings.Split(entry.Output, "\n")
-		for _, ol := range outputLines {
+		for i, ol := range outputLines {
+			if i >= 5 {
+				lines = append(lines, styles.Muted.Render("      ..."))
+				break
+			}
 			if ol != "" {
-				lines = append(lines, fmt.Sprintf("      %s", ui.TruncateString(ol, 80)))
+				lines = append(lines, fmt.Sprintf("        %s", ui.TruncateString(ol, l.width-14)))
 			}
 		}
 	}
 
 	if len(entry.Validation) > 0 {
-		lines = append(lines, "    Validations:")
+		lines = append(lines, styles.Subtle.Render("      Validations:"))
 		for _, v := range entry.Validation {
-			var statusIcon string
-			var statusStyle lipgloss.Style
+			var vIcon string
+			var vStyle lipgloss.Style
 			if v.Status == "passed" || v.Status == "success" {
-				statusIcon = "✓"
-				statusStyle = styles.StatusCompleted
+				vIcon = "✓"
+				vStyle = styles.StatusCompleted
 			} else {
-				statusIcon = "✗"
-				statusStyle = styles.StatusFailed
+				vIcon = "✗"
+				vStyle = styles.StatusFailed
 			}
-			line := fmt.Sprintf("      %s %s", statusIcon, v.Type)
+			line := fmt.Sprintf("        %s %s", vIcon, v.Type)
 			if v.Message != "" {
-				line += fmt.Sprintf(": %s", v.Message)
+				line += fmt.Sprintf(": %s", ui.TruncateString(v.Message, 40))
 			}
-			lines = append(lines, statusStyle.Render(line))
+			lines = append(lines, vStyle.Render(line))
 		}
 	}
 
 	if entry.Error != "" {
-		lines = append(lines, styles.StatusFailed.Render(fmt.Sprintf("    Error: %s", ui.TruncateString(entry.Error, 80))))
-	}
-
-	if entry.DurationMs > 0 {
-		lines = append(lines, styles.Muted.Render(fmt.Sprintf("    Duration: %s", FormatDuration(entry.DurationMs))))
+		lines = append(lines, styles.StatusFailed.Render(fmt.Sprintf("      Error: %s", ui.TruncateString(entry.Error, l.width-14))))
 	}
 
 	return strings.Join(lines, "\n")
-}
-
-func (l LogsPanel) View() string {
-	boxStyle := styles.PanelInactive
-	if l.focused {
-		boxStyle = styles.PanelActive
-	}
-
-	title := " Detailed Logs "
-
-	content := l.viewport.View()
-
-	return lipgloss.JoinVertical(lipgloss.Left,
-		styles.PanelHeader.Render(title),
-		boxStyle.Render(content),
-	)
 }
 
 func (l *LogsPanel) SetFocused(focused bool) {
@@ -277,30 +445,20 @@ func (l *LogsPanel) SetFocused(focused bool) {
 }
 
 func (l *LogsPanel) SetSize(width, height int) {
-	l.width = width - 4
-	l.height = height - 4
-	l.viewport.Width = l.width
-	l.viewport.Height = l.height
+	l.width = width
+	l.height = height
 }
 
 func (l *LogsPanel) Clear() {
 	l.logs = []LogEntry{}
 	l.instance = nil
-	l.viewport.SetContent("")
-}
-
-func (l *LogsPanel) ToggleExpanded() {
-	l.expanded = !l.expanded
-}
-
-func (l *LogsPanel) SelectStage(index int) {
-	if index >= 0 && index < len(l.logs) {
-		l.selectedStage = index
-	}
+	l.expanded = make(map[int]bool)
+	l.selectedIdx = 0
+	l.scrollOff = 0
 }
 
 func FormatLogsFromInstance(instance *client.WorkflowInstance) string {
 	panel := NewLogsPanel()
 	panel.SetInstance(instance)
-	return panel.renderLogs()
+	return panel.View()
 }

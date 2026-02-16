@@ -16,7 +16,14 @@ var (
 	PanelHeader = lipgloss.NewStyle().
 			Background(Primary).
 			Foreground(TextInverse).
-			Padding(0, 1)
+			Padding(0, 1).
+			Bold(true)
+
+	PanelHeaderInactive = lipgloss.NewStyle().
+				Background(BgTertiary).
+				Foreground(TextSecondary).
+				Padding(0, 1).
+				Bold(true)
 
 	PanelNoBorder = lipgloss.NewStyle().Padding(0, 1)
 
@@ -196,6 +203,26 @@ var (
 			Foreground(Primary).
 			Bold(true)
 )
+
+func RenderPanel(title string, content string, focused bool, width, height int) string {
+	var borderStyle lipgloss.Style
+	var headerStyle lipgloss.Style
+
+	if focused {
+		borderStyle = PanelActive.BorderForeground(BorderActive)
+		headerStyle = PanelHeader
+	} else {
+		borderStyle = PanelInactive.BorderForeground(BorderNormal)
+		headerStyle = PanelHeaderInactive
+	}
+
+	fullContent := headerStyle.Render(title) + "\n" + content
+
+	return borderStyle.
+		Width(width - 2).
+		Height(height - 2).
+		Render(fullContent)
+}
 
 func ResolveButtonStyle(focused, hover bool, danger bool) lipgloss.Style {
 	if danger {

@@ -207,14 +207,9 @@ func (d *WorkflowDiagram) renderProgress() string {
 }
 
 func (d WorkflowDiagram) View() string {
-	boxStyle := styles.PanelInactive
-	if d.focused {
-		boxStyle = styles.PanelActive
-	}
-
-	title := " Workflow Diagram "
+	title := " Workflow "
 	if d.workflow != nil && d.workflow.Name != "" {
-		title = fmt.Sprintf(" %s ", d.workflow.Name)
+		title = " " + d.workflow.Name + " "
 	}
 
 	diagram := d.renderDiagram()
@@ -227,10 +222,7 @@ func (d WorkflowDiagram) View() string {
 		content = diagram
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left,
-		styles.PanelHeader.Render(title),
-		boxStyle.Render(content),
-	)
+	return styles.RenderPanel(title, content, d.focused, d.width, d.height)
 }
 
 func (d *WorkflowDiagram) SetFocused(focused bool) {
@@ -238,8 +230,8 @@ func (d *WorkflowDiagram) SetFocused(focused bool) {
 }
 
 func (d *WorkflowDiagram) SetSize(width, height int) {
-	d.width = width - 4
-	d.height = height - 4
+	d.width = width
+	d.height = height
 }
 
 func (d *WorkflowDiagram) Clear() {

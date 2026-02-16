@@ -92,4 +92,7 @@ func init() {
 	DefaultRegistry.Register(Command{ID: "quit", Name: "Quit", Key: "q", Context: "", Priority: 10})
 
 	DefaultRegistry.Register(Command{ID: "focus-sidebar", Name: "Sidebar", Key: "Tab", Context: "main", Priority: 1})
+	DefaultRegistry.Register(Command{ID: "logs-up", Name: "Up", Key: "↑", Context: "main", Priority: 2})
+	DefaultRegistry.Register(Command{ID: "logs-down", Name: "Down", Key: "↓", Context: "main", Priority: 2})
+	DefaultRegistry.Register(Command{ID: "logs-expand", Name: "Expand", Key: "Enter", Context: "main", Priority: 3})
 }
