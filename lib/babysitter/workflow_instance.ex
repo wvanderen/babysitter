@@ -38,7 +38,8 @@ defmodule Babysitter.WorkflowInstance do
           failure_reason: String.t() | nil,
           escalation_reason: String.t() | nil,
           retry_count: non_neg_integer(),
-          max_retries: non_neg_integer()
+          max_retries: non_neg_integer(),
+          executing: boolean()
         }
 
   @type execution_entry :: %{
@@ -67,7 +68,8 @@ defmodule Babysitter.WorkflowInstance do
     failure_reason: nil,
     escalation_reason: nil,
     retry_count: 0,
-    max_retries: 3
+    max_retries: 3,
+    executing: false
   ]
 
   def child_spec(opts) do
@@ -301,16 +303,27 @@ defmodule Babysitter.WorkflowInstance do
 
   @impl true
   def handle_info(:execute_current_stage, state) do
-    if state.status != :running do
-      {:noreply, state}
-    else
-      case execute_stage(state) do
-        {:ok, result, new_state} ->
-          handle_stage_result(result, new_state)
+    cond do
+      state.status != :running ->
+        {:noreply, state}
 
-        {:error, reason, new_state} ->
-          {:noreply, %{new_state | status: :failed, failure_reason: inspect(reason)}}
-      end
+      state.executing ->
+        {:noreply, state}
+
+      true ->
+        spawn_stage_execution(state)
+        {:noreply, %{state | executing: true}}
+    end
+  end
+
+  def handle_info({:stage_execution_complete, result}, _state) do
+    case result do
+      {:ok, exec_result, new_state} ->
+        handle_stage_result(exec_result, %{new_state | executing: false})
+
+      {:error, reason, new_state} ->
+        {:noreply,
+         %{new_state | status: :failed, executing: false, failure_reason: inspect(reason)}}
     end
   end
 
@@ -417,13 +430,32 @@ defmodule Babysitter.WorkflowInstance do
     end
   end
 
+  defp spawn_stage_execution(state) do
+    parent = self()
+
+    Task.start(fn ->
+      result = execute_stage(state)
+      send(parent, {:stage_execution_complete, result})
+    end)
+  end
+
   defp build_executor_opts(state) do
     opts = []
 
-    if Map.has_key?(state.variables, :poll_interval) do
-      Keyword.put(opts, :poll_interval, state.variables.poll_interval)
-    else
-      opts
+    opts =
+      if Map.has_key?(state.variables, :poll_interval) do
+        Keyword.put(opts, :poll_interval, state.variables.poll_interval)
+      else
+        opts
+      end
+
+    case WorkflowStore.get(state.workflow_id) do
+      {:ok, workflow} ->
+        workflow_vars = Map.get(workflow.metadata, :variables, %{})
+        Keyword.put(opts, :variables, Map.merge(workflow_vars, state.variables))
+
+      {:error, _} ->
+        opts
     end
   end
 

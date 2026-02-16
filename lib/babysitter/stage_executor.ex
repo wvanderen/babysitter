@@ -6,7 +6,7 @@ defmodule Babysitter.StageExecutor do
   and determining execution results.
   """
 
-  alias Babysitter.{Session, Stage, Tmux, Validation}
+  alias Babysitter.{Session, Stage, Tmux, Validation, TemplateInterpolator}
 
   @type execution_status :: :success | :failure | :timeout
   @type exit_code :: non_neg_integer() | nil
@@ -82,9 +82,30 @@ defmodule Babysitter.StageExecutor do
     execute_action(stage, session_id, opts)
   end
 
+  def execute(%Stage{type: :decision} = stage, session_id, opts) do
+    execute_decision(stage, session_id, opts)
+  end
+
   def execute(%Stage{} = stage, session_id, opts) do
     execute_agent(stage, session_id, opts)
   end
+
+  defp interpolate_with_context(text, opts) when is_binary(text) do
+    context = Keyword.get(opts, :context, %{})
+    variables = Keyword.get(opts, :variables, %{})
+    full_context = deep_merge_context(variables, context)
+    TemplateInterpolator.interpolate(text, full_context)
+  end
+
+  defp interpolate_with_context(text, _opts), do: text
+
+  defp deep_merge_context(vars, ctx) when is_map(vars) and is_map(ctx) do
+    Map.merge(vars, ctx, fn _k, v1, v2 ->
+      if is_map(v1) and is_map(v2), do: Map.merge(v1, v2), else: v2
+    end)
+  end
+
+  defp deep_merge_context(vars, _ctx), do: vars
 
   @doc """
   Execute an action stage (shell command) within a session.
@@ -112,7 +133,7 @@ defmodule Babysitter.StageExecutor do
     env = Keyword.get(opts, :env, [])
 
     with {:ok, session} <- get_session(session_id),
-         {:ok, command, marker_id} <- build_action_command(stage, env) do
+         {:ok, command, marker_id} <- build_action_command(stage, env, opts) do
       Logger.debug("Executing action #{stage.id}: #{command}")
       :ok = Tmux.send_keys(session.tmux_name, command)
 
@@ -180,6 +201,34 @@ defmodule Babysitter.StageExecutor do
   end
 
   @doc """
+  Execute a decision stage.
+
+  Decision stages are simple pass-through stages that always succeed.
+  They're used for branching logic in workflows.
+  """
+  @spec execute_decision(Stage.t(), String.t(), keyword()) :: {:ok, Result.t()} | {:error, term()}
+  def execute_decision(%Stage{type: :decision} = stage, session_id, _opts) do
+    started_at = DateTime.utc_now()
+    finished_at = DateTime.utc_now()
+
+    result = %Result{
+      stage_id: stage.id,
+      session_id: session_id,
+      started_at: started_at,
+      finished_at: finished_at,
+      status: :success,
+      output: "",
+      exit_code: 0
+    }
+
+    {:ok, result}
+  end
+
+  def execute_decision(%Stage{type: type}, _session_id, _opts) do
+    {:error, {:invalid_stage_type, expected: :decision, got: type}}
+  end
+
+  @doc """
   Execute an agent stage within a session.
 
   Agent stages send prompts to an AI agent running in the tmux session.
@@ -190,7 +239,8 @@ defmodule Babysitter.StageExecutor do
 
     with {:ok, session} <- get_session(session_id),
          :ok <- validate_stage_type(stage, :agent),
-         {:ok, command} <- build_command(stage) do
+         :ok <- Session.ensure_agent_started(session_id),
+         {:ok, command} <- build_command(stage, opts) do
       case run_in_tmux(session.tmux_name, command, opts) do
         {:ok, {output, exit_code}} ->
           finished_at = DateTime.utc_now()
@@ -239,7 +289,8 @@ defmodule Babysitter.StageExecutor do
 
     with {:ok, session} <- get_session(session_id),
          :ok <- validate_stage_type(stage, :agent),
-         {:ok, command} <- build_command(stage) do
+         :ok <- Session.ensure_agent_started(session_id),
+         {:ok, command} <- build_command(stage, opts) do
       :ok = Tmux.send_keys(session.tmux_name, command)
 
       case wait_for_completion(
@@ -371,34 +422,35 @@ defmodule Babysitter.StageExecutor do
     {:error, {:invalid_stage_type, expected: expected, got: type}}
   end
 
-  defp build_command(%Stage{prompt: prompt}) when is_binary(prompt) and prompt != "" do
-    {:ok, prompt}
+  defp build_command(%Stage{prompt: prompt}, opts) when is_binary(prompt) and prompt != "" do
+    {:ok, interpolate_with_context(prompt, opts)}
   end
 
-  defp build_command(%Stage{prompt: nil}) do
+  defp build_command(%Stage{prompt: nil}, _opts) do
     {:error, :no_prompt_defined}
   end
 
-  defp build_command(%Stage{prompt: ""}) do
+  defp build_command(%Stage{prompt: ""}, _opts) do
     {:error, :empty_prompt}
   end
 
-  defp build_action_command(%Stage{command: command}, env)
+  defp build_action_command(%Stage{command: command}, env, opts)
        when is_binary(command) and command != "" do
+    interpolated = interpolate_with_context(command, opts)
     env_prefix = build_env_prefix(env)
     marker_id = :crypto.strong_rand_bytes(4) |> Base.encode16(case: :lower)
 
     wrapped_command =
-      "#{env_prefix}(#{command}); RET=$?; echo \"BABYSITTER_EXIT_${RET}_CODE_#{marker_id}\""
+      "#{env_prefix}(#{interpolated}); RET=$?; echo \"BABYSITTER_EXIT_${RET}_CODE_#{marker_id}\""
 
     {:ok, wrapped_command, marker_id}
   end
 
-  defp build_action_command(%Stage{command: nil}, _env) do
+  defp build_action_command(%Stage{command: nil}, _env, _opts) do
     {:error, :no_command_defined}
   end
 
-  defp build_action_command(%Stage{command: ""}, _env) do
+  defp build_action_command(%Stage{command: ""}, _env, _opts) do
     {:error, :empty_command}
   end
 
@@ -484,23 +536,59 @@ defmodule Babysitter.StageExecutor do
 
     started = System.monotonic_time(:millisecond)
 
-    case poll_for_completion(tmux_name, started, max_wait, poll_interval) do
+    case poll_for_agent_completion(tmux_name, started, max_wait, poll_interval) do
       {:ok, output} -> {:ok, {output, 0}}
       {:error, reason} -> {:error, reason}
     end
   end
 
-  defp poll_for_completion(tmux_name, started, max_wait, poll_interval) do
-    now = System.monotonic_time(:millisecond)
+  defp poll_for_agent_completion(tmux_name, started, max_wait, poll_interval) do
+    stable_threshold = 3000
+    do_poll_for_agent(tmux_name, started, max_wait, poll_interval, stable_threshold, nil, 0)
+  end
 
-    if now - started > max_wait do
-      {:error, :timeout}
+  defp do_poll_for_agent(
+         tmux_name,
+         started,
+         max_wait,
+         poll_interval,
+         stable_threshold,
+         last_output,
+         stable_ms
+       ) do
+    now = System.monotonic_time(:millisecond)
+    elapsed = now - started
+
+    if elapsed > max_wait do
+      case Tmux.capture_pane(tmux_name) do
+        output when is_binary(output) -> {:ok, output}
+        {:error, _} -> {:error, :timeout}
+      end
     else
       Process.sleep(poll_interval)
 
       case Tmux.capture_pane(tmux_name) do
         output when is_binary(output) ->
-          {:ok, output}
+          new_stable_ms =
+            if output == last_output do
+              stable_ms + poll_interval
+            else
+              0
+            end
+
+          if new_stable_ms >= stable_threshold do
+            {:ok, output}
+          else
+            do_poll_for_agent(
+              tmux_name,
+              started,
+              max_wait,
+              poll_interval,
+              stable_threshold,
+              output,
+              new_stable_ms
+            )
+          end
 
         {:error, _} = error ->
           error

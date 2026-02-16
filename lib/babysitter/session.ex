@@ -34,7 +34,9 @@ defmodule Babysitter.Session do
              :metadata,
              :failure_reason,
              :escalation_reason,
-             :validation_results
+             :validation_results,
+             :agent,
+             :agent_started
            ]}
   @type t :: %__MODULE__{
           id: session_id(),
@@ -45,7 +47,9 @@ defmodule Babysitter.Session do
           buffer_size: non_neg_integer(),
           max_buffer_size: non_neg_integer(),
           metadata: map(),
-          validation_results: %{optional(term()) => [Babysitter.Validation.Result.t()]}
+          validation_results: %{optional(term()) => [Babysitter.Validation.Result.t()]},
+          agent: atom() | nil,
+          agent_started: boolean()
         }
 
   @enforce_keys [:id]
@@ -60,7 +64,9 @@ defmodule Babysitter.Session do
     metadata: %{},
     failure_reason: nil,
     escalation_reason: nil,
-    validation_results: %{}
+    validation_results: %{},
+    agent: nil,
+    agent_started: false
   ]
 
   @valid_transitions %{
@@ -173,6 +179,7 @@ defmodule Babysitter.Session do
     tmux_name = Keyword.get(opts, :tmux_name, "babysitter-#{id}")
     max_buffer = Keyword.get(opts, :max_buffer_size, 100_000)
     metadata = Keyword.get(opts, :metadata, %{})
+    agent = Keyword.get(opts, :agent)
 
     case Babysitter.Tmux.create_session(tmux_name) do
       :ok ->
@@ -182,7 +189,9 @@ defmodule Babysitter.Session do
           status: :running,
           started_at: DateTime.utc_now(),
           max_buffer_size: max_buffer,
-          metadata: metadata
+          metadata: metadata,
+          agent: agent,
+          agent_started: false
         }
 
         {:ok, state}
@@ -190,6 +199,49 @@ defmodule Babysitter.Session do
       {:error, reason} ->
         {:stop, {:tmux_error, reason}}
     end
+  end
+
+  @doc """
+  Ensure the agent is started in this session.
+  Safe to call multiple times - only starts once.
+  """
+  @spec ensure_agent_started(session_id()) :: :ok | {:error, term()}
+  def ensure_agent_started(id) do
+    GenServer.call(via_tuple(id), :ensure_agent_started)
+  end
+
+  @doc """
+  Check if the agent has been started.
+  """
+  @spec agent_started?(session_id()) :: boolean()
+  def agent_started?(id) do
+    GenServer.call(via_tuple(id), :agent_started?)
+  end
+
+  defp do_start_agent(_tmux_name, nil), do: :ok
+
+  defp do_start_agent(tmux_name, agent_name) when is_atom(agent_name) do
+    case Babysitter.Config.agent(agent_name) do
+      nil ->
+        {:error, {:unknown_agent, agent_name}}
+
+      agent_config ->
+        command = build_agent_command(agent_config)
+        Process.sleep(200)
+        Babysitter.Tmux.send_keys(tmux_name, command)
+    end
+  end
+
+  defp do_start_agent(_tmux_name, agent_name) do
+    {:error, {:invalid_agent_name, agent_name}}
+  end
+
+  defp build_agent_command(%{command: cmd, args: args}) when is_list(args) do
+    Enum.join([cmd | args], " ")
+  end
+
+  defp build_agent_command(%{command: cmd}) do
+    cmd
   end
 
   @impl true
@@ -203,6 +255,28 @@ defmodule Babysitter.Session do
 
   def handle_call(:get_output, _from, state) do
     {:reply, {:ok, state.output_buffer}, state}
+  end
+
+  def handle_call(:ensure_agent_started, _from, %__MODULE__{agent_started: true} = state) do
+    {:reply, :ok, state}
+  end
+
+  def handle_call(:ensure_agent_started, _from, %__MODULE__{agent: nil} = state) do
+    {:reply, :ok, state}
+  end
+
+  def handle_call(:ensure_agent_started, _from, %__MODULE__{} = state) do
+    case do_start_agent(state.tmux_name, state.agent) do
+      :ok ->
+        {:reply, :ok, %{state | agent_started: true}}
+
+      {:error, _} = error ->
+        {:reply, error, state}
+    end
+  end
+
+  def handle_call(:agent_started?, _from, state) do
+    {:reply, state.agent_started, state}
   end
 
   def handle_call(:pause, _from, state) do

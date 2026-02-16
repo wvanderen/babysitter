@@ -37,10 +37,13 @@ defmodule BabysitterWeb.WorkflowController do
 
   def execute(conn, %{"workflow_id" => id} = params) do
     case get_workflow(id) do
-      {:ok, _workflow} ->
+      {:ok, workflow} ->
         session_id = Map.get(params, "session_id", generate_session_id())
         variables = build_variables(params)
         issue_id = Map.get(params, "issue_id")
+
+        workflow_vars = get_in(workflow, [:metadata, :variables]) || %{}
+        agent_name = Map.get(workflow_vars, :agent) || Map.get(workflow_vars, "agent")
 
         final_vars =
           if issue_id do
@@ -49,10 +52,22 @@ defmodule BabysitterWeb.WorkflowController do
             variables
           end
 
-        case Babysitter.SessionManager.create_session(session_id,
-               issue_id: issue_id,
-               variables: final_vars
-             ) do
+        session_opts = [
+          issue_id: issue_id,
+          variables: final_vars
+        ]
+
+        session_opts =
+          if agent_name do
+            agent_atom =
+              if is_binary(agent_name), do: String.to_atom(agent_name), else: agent_name
+
+            Keyword.put(session_opts, :agent, agent_atom)
+          else
+            session_opts
+          end
+
+        case Babysitter.SessionManager.create_session(session_id, session_opts) do
           {:ok, _pid} ->
             opts = [
               session_id: session_id,

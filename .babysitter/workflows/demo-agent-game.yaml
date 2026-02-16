@@ -1,0 +1,159 @@
+id: demo-agent-game
+name: Demo Agent Game
+description: Multi-stage workflow demonstrating agent orchestration by building a fruit merge game
+intelligence: hybrid
+
+variables:
+  game_dir: /tmp/fruit-merge-game
+  agent: claude
+
+stages:
+  - id: setup
+    type: action
+    command: "mkdir -p {{game_dir}} && echo 'Created game directory at {{game_dir}}'"
+    timeout: 10s
+    on_success: planning
+    on_failure: cleanup
+
+  - id: planning
+    type: agent
+    prompt: |
+      You are in a planning phase for a fruit merge game.
+      
+      Create a file at /tmp/fruit-merge-game/PLAN.md with:
+      
+      1. Architecture overview (HTML5 Canvas game structure)
+      2. File structure (index.html, style.css, game.js)
+      3. Game mechanics:
+         - 6 fruit types: cherry, strawberry, grape, orange, apple, watermelon
+         - Fruits fall with gravity and collide
+         - Same fruits merge into next tier when touching
+         - Score tracking based on merges
+         - Game over when stack reaches top
+      4. Key functions to implement
+      5. CSS styling approach
+      
+      Keep it concise but complete. This plan will guide implementation.
+    timeout: 10m
+    validation:
+      - type: file_exists
+        path: /tmp/fruit-merge-game/PLAN.md
+      - type: file_contains
+        path: /tmp/fruit-merge-game/PLAN.md
+        pattern: "Architecture"
+    on_success: build
+    on_failure: escalate
+
+  - id: build
+    type: agent
+    prompt: |
+      Read the plan at /tmp/fruit-merge-game/PLAN.md and implement the fruit merge game.
+      
+      Create these files in /tmp/fruit-merge-game/:
+      
+      1. index.html - Main HTML file with canvas element
+      2. style.css - Styling for the game container and UI
+      3. game.js - Game logic including:
+         - Fruit definitions (sizes, colors, tiers)
+         - Physics (gravity, collision detection)
+         - Merge logic (same fruits combine into next tier)
+         - Score tracking
+         - Click to drop fruit mechanic
+         - Game over detection
+         - Restart functionality
+      
+      The game should be playable by opening index.html in a browser.
+      Keep the code clean and well-commented.
+    timeout: 20m
+    validation:
+      - type: file_exists
+        path: /tmp/fruit-merge-game/index.html
+      - type: file_exists
+        path: /tmp/fruit-merge-game/game.js
+      - type: file_contains
+        path: /tmp/fruit-merge-game/index.html
+        pattern: "canvas"
+      - type: file_contains
+        path: /tmp/fruit-merge-game/game.js
+        pattern: "merge"
+    on_success: enhance
+    on_failure: escalate
+
+  - id: enhance
+    type: agent
+    prompt: |
+      Enhance the fruit merge game at /tmp/fruit-merge-game/:
+      
+      1. Add visual polish:
+         - Gradient backgrounds or patterns
+         - Smooth animations for fruit dropping
+         - Particle effects when fruits merge
+         - Score popup animations
+      
+      2. Improve UX:
+         - Display next fruit preview
+         - Show current score prominently
+         - High score tracking (localStorage)
+         - Sound effects indicators (optional, just comments)
+      
+      3. Polish the UI:
+         - Nice container styling
+         - Game title header
+         - Instructions overlay or section
+      
+      Make it feel like a polished, playable game.
+    timeout: 15m
+    validation:
+      - type: file_exists
+        path: /tmp/fruit-merge-game/style.css
+      - type: file_contains
+        path: /tmp/fruit-merge-game/style.css
+        pattern: "gradient|animation"
+    on_success: validate
+    on_failure: escalate
+
+  - id: validate
+    type: action
+    command: |
+      echo "=== Validation Report ===" && \
+      echo "" && \
+      echo "Files created:" && \
+      ls -la /tmp/fruit-merge-game/ && \
+      echo "" && \
+      echo "HTML canvas check:" && \
+      grep -c "canvas" /tmp/fruit-merge-game/index.html && \
+      echo "" && \
+      echo "JS merge check:" && \
+      grep -c "merge" /tmp/fruit-merge-game/game.js && \
+      echo "" && \
+      echo "CSS style check:" && \
+      wc -l /tmp/fruit-merge-game/style.css && \
+      echo "" && \
+      echo "=== VALIDATION PASSED ==="
+    timeout: 30s
+    validation:
+      - type: output_contains
+        pattern: "VALIDATION PASSED"
+    on_success: complete
+    on_failure: escalate
+
+  - id: cleanup
+    type: action
+    command: "rm -rf /tmp/fruit-merge-game && echo 'Cleaned up failed run'"
+
+  - id: escalate
+    type: action
+    command: "echo 'ESCALATION: Game build failed validation' && ls -la /tmp/fruit-merge-game/ 2>/dev/null || echo 'No files created'"
+    on_failure: cleanup
+
+  - id: complete
+    type: action
+    command: |
+      echo "Fruit Merge Game Complete!" && \
+      echo "" && \
+      echo "Open in browser: file:///tmp/fruit-merge-game/index.html" && \
+      echo "" && \
+      echo "Game files:" && \
+      find /tmp/fruit-merge-game -type f -exec echo "  {}" \;
+
+entry_point: setup
