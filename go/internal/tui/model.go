@@ -9,12 +9,16 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/wvanderen/babysitter/go/internal/client"
+	"github.com/wvanderen/babysitter/go/internal/styles"
 )
 
 type FocusArea int
 
 const (
 	FocusSessions FocusArea = iota
+	FocusStage
+	FocusDiagram
+	FocusLogs
 	FocusOutput
 )
 
@@ -31,33 +35,41 @@ var (
 )
 
 type AppModel struct {
-	sessionsList   SessionList
-	outputViewer   OutputViewer
-	workflowSelect WorkflowSelect
-	newSession     *NewSession
-	focus          FocusArea
-	viewState      ViewState
-	client         *client.Client
-	wsClient       *client.WSClient
-	sessions       []client.Session
-	currentIndex   int
-	connected      bool
-	quitting       bool
-	err            error
+	sessionsList    SessionList
+	stageView       StageView
+	workflowDiagram WorkflowDiagram
+	logsPanel       LogsPanel
+	outputViewer    OutputViewer
+	workflowSelect  WorkflowSelect
+	newSession      *NewSession
+	focus           FocusArea
+	viewState       ViewState
+	client          *client.Client
+	wsClient        *client.WSClient
+	sessions        []client.Session
+	currentIndex    int
+	currentInstance *client.WorkflowInstance
+	currentWorkflow *client.Workflow
+	connected       bool
+	quitting        bool
+	err             error
 }
 
 func NewAppModel(apiClient *client.Client) AppModel {
 	return AppModel{
-		sessionsList:   NewSessionList(),
-		outputViewer:   NewOutputViewer(),
-		workflowSelect: NewWorkflowSelect(),
-		focus:          FocusSessions,
-		viewState:      ViewNormal,
-		client:         apiClient,
-		sessions:       []client.Session{},
-		currentIndex:   0,
-		connected:      false,
-		quitting:       false,
+		sessionsList:    NewSessionList(),
+		stageView:       NewStageView(),
+		workflowDiagram: NewWorkflowDiagram(),
+		logsPanel:       NewLogsPanel(),
+		outputViewer:    NewOutputViewer(),
+		workflowSelect:  NewWorkflowSelect(),
+		focus:           FocusSessions,
+		viewState:       ViewNormal,
+		client:          apiClient,
+		sessions:        []client.Session{},
+		currentIndex:    0,
+		connected:       false,
+		quitting:        false,
 	}
 }
 
@@ -101,6 +113,27 @@ func (m AppModel) fetchWorkflows() tea.Cmd {
 	}
 }
 
+func (m AppModel) fetchInstance(sessionID string) tea.Cmd {
+	return func() tea.Msg {
+		if m.client == nil {
+			return nil
+		}
+		session, err := m.client.GetSession(sessionID)
+		if err != nil {
+			return nil
+		}
+		if session.WorkflowInstance == nil {
+			return nil
+		}
+		instance := session.WorkflowInstance
+		workflow, err := m.client.GetWorkflow(instance.WorkflowID)
+		if err != nil {
+			return InstanceLoadedMsg{Instance: instance, Workflow: nil}
+		}
+		return InstanceLoadedMsg{Instance: instance, Workflow: workflow}
+	}
+}
+
 type errMsg struct{ error }
 
 type FocusMsg struct {
@@ -111,6 +144,11 @@ type ExecuteWorkflowMsg struct {
 	WorkflowID string
 	IssueID    string
 	Variables  map[string]interface{}
+}
+
+type InstanceLoadedMsg struct {
+	Instance *client.WorkflowInstance
+	Workflow *client.Workflow
 }
 
 func (e errMsg) Error() string { return e.error.Error() }
@@ -139,10 +177,16 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.sessionsList.selected < 0 {
 					m.sessionsList.selected = len(m.sessionsList.items) - 1
 				}
+				if selected := m.sessionsList.SelectedSession(); selected != nil {
+					cmds = append(cmds, m.fetchInstance(selected.ID))
+				}
 			}
 		case "down":
 			if m.focus == FocusSessions && len(m.sessionsList.items) > 0 {
 				m.sessionsList.selected = (m.sessionsList.selected + 1) % len(m.sessionsList.items)
+				if selected := m.sessionsList.SelectedSession(); selected != nil {
+					cmds = append(cmds, m.fetchInstance(selected.ID))
+				}
 			}
 		case "p":
 			if m.focus == FocusSessions {
@@ -184,21 +228,42 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.WindowSizeMsg:
 		h, v := appStyle.GetFrameSize()
-		m.sessionsList.SetSize(msg.Width-h, (msg.Height-v-20)/2)
-		m.outputViewer.SetSize(msg.Width-h, (msg.Height-v-20)/2)
+		panelWidth := (msg.Width - h) / 2
+		panelHeight := (msg.Height - v - 20) / 3
+		m.sessionsList.SetSize(panelWidth, panelHeight)
+		m.stageView.SetSize(panelWidth, panelHeight)
+		m.workflowDiagram.SetSize(panelWidth, panelHeight)
+		m.logsPanel.SetSize(panelWidth, panelHeight*2)
+		m.outputViewer.SetSize(msg.Width-h, panelHeight)
 
 	case SessionListMsg:
 		m.sessionsList.items = msg.Sessions
+		if len(msg.Sessions) > 0 && m.sessionsList.selected >= 0 && m.sessionsList.selected < len(msg.Sessions) {
+			cmds = append(cmds, m.fetchInstance(msg.Sessions[m.sessionsList.selected].ID))
+		}
+
+	case InstanceLoadedMsg:
+		m.currentInstance = msg.Instance
+		m.currentWorkflow = msg.Workflow
+		m.stageView.SetInstance(msg.Instance)
+		m.workflowDiagram.SetWorkflow(msg.Workflow)
+		m.workflowDiagram.SetInstance(msg.Instance)
+		m.logsPanel.SetInstance(msg.Instance)
 
 	case errMsg:
 		m.err = msg
 
 	case client.WSMessage:
-		m.handleWSMessage(msg)
+		if cmd := m.handleWSMessage(msg); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
 
 	case FocusMsg:
 		m.focus = msg.Area
 		m.sessionsList.SetFocused(m.focus == FocusSessions)
+		m.stageView.SetFocused(m.focus == FocusStage)
+		m.workflowDiagram.SetFocused(m.focus == FocusDiagram)
+		m.logsPanel.SetFocused(m.focus == FocusLogs)
 		m.outputViewer.SetFocused(m.focus == FocusOutput)
 
 	case ControlMsg:
@@ -262,17 +327,23 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *AppModel) cycleFocus() {
-	m.sessionsList.SetFocused(m.focus == FocusSessions)
-	m.outputViewer.SetFocused(m.focus == FocusOutput)
-
 	switch m.focus {
 	case FocusSessions:
+		m.focus = FocusStage
+	case FocusStage:
+		m.focus = FocusDiagram
+	case FocusDiagram:
+		m.focus = FocusLogs
+	case FocusLogs:
 		m.focus = FocusOutput
 	case FocusOutput:
 		m.focus = FocusSessions
 	}
 
 	m.sessionsList.SetFocused(m.focus == FocusSessions)
+	m.stageView.SetFocused(m.focus == FocusStage)
+	m.workflowDiagram.SetFocused(m.focus == FocusDiagram)
+	m.logsPanel.SetFocused(m.focus == FocusLogs)
 	m.outputViewer.SetFocused(m.focus == FocusOutput)
 }
 
@@ -281,17 +352,50 @@ func (m *AppModel) cycleFocusBack() {
 	case FocusSessions:
 		m.focus = FocusOutput
 	case FocusOutput:
+		m.focus = FocusLogs
+	case FocusLogs:
+		m.focus = FocusDiagram
+	case FocusDiagram:
+		m.focus = FocusStage
+	case FocusStage:
 		m.focus = FocusSessions
 	}
+
+	m.sessionsList.SetFocused(m.focus == FocusSessions)
+	m.stageView.SetFocused(m.focus == FocusStage)
+	m.workflowDiagram.SetFocused(m.focus == FocusDiagram)
+	m.logsPanel.SetFocused(m.focus == FocusLogs)
+	m.outputViewer.SetFocused(m.focus == FocusOutput)
 }
 
-func (m AppModel) handleWSMessage(msg client.WSMessage) {
+func (m *AppModel) handleWSMessage(msg client.WSMessage) tea.Cmd {
 	switch msg.Event {
-	case "output":
-		m.outputViewer.AppendOutput(msg.Output)
-	case "session_started", "session_updated", "session_completed":
-		_ = m.fetchSessions()
+	case "session:output":
+		if msg.Payload != nil {
+			m.outputViewer.AppendOutput(msg.Payload.Output)
+		}
+	case "stage:started":
+		if msg.Payload != nil {
+			m.logsPanel.AddWSPayload(msg.Payload)
+		}
+		if selected := m.sessionsList.SelectedSession(); selected != nil {
+			return m.fetchInstance(selected.ID)
+		}
+	case "stage:completed":
+		if msg.Payload != nil {
+			m.logsPanel.AddWSPayload(msg.Payload)
+		}
+		if selected := m.sessionsList.SelectedSession(); selected != nil {
+			return m.fetchInstance(selected.ID)
+		}
+	case "stage:transition", "workflow:progress":
+		if selected := m.sessionsList.SelectedSession(); selected != nil {
+			return m.fetchInstance(selected.ID)
+		}
+	case "session:started", "session:status":
+		return m.fetchSessions()
 	}
+	return nil
 }
 
 func (m AppModel) View() string {
@@ -302,7 +406,7 @@ func (m AppModel) View() string {
 	switch m.viewState {
 	case ViewWorkflowSelect:
 		header := lipgloss.NewStyle().Bold(true).Render("BABYSITTER TUI") + "  " +
-			helpStyle.Render("[Enter] Select  [Esc] Cancel  [q] Quit")
+			styles.Muted.Render("[Enter] Select  [Esc] Cancel  [q] Quit")
 		return appStyle.Render(
 			lipgloss.JoinVertical(lipgloss.Left,
 				header,
@@ -313,7 +417,7 @@ func (m AppModel) View() string {
 
 	case ViewNewSession:
 		header := lipgloss.NewStyle().Bold(true).Render("BABYSITTER TUI") + "  " +
-			helpStyle.Render("[Enter] Start  [Esc] Cancel  [q] Quit")
+			styles.Muted.Render("[Enter] Start  [Esc] Cancel  [q] Quit")
 		return appStyle.Render(
 			lipgloss.JoinVertical(lipgloss.Left,
 				header,
@@ -330,17 +434,30 @@ func (m AppModel) View() string {
 	}
 
 	sessionsPanel := m.sessionsList.View()
+	stagePanel := m.stageView.View()
+	diagramPanel := m.workflowDiagram.View()
+	logsPanel := m.logsPanel.View()
 	outputPanel := m.outputViewer.View()
 
-	panels := lipgloss.JoinVertical(lipgloss.Left,
+	leftColumn := lipgloss.JoinVertical(lipgloss.Left,
 		sessionsPanel,
+		"",
+		stagePanel,
+		"",
+		diagramPanel,
+	)
+
+	rightColumn := lipgloss.JoinVertical(lipgloss.Left,
+		logsPanel,
 		"",
 		outputPanel,
 	)
 
+	panels := lipgloss.JoinHorizontal(lipgloss.Top, leftColumn, "  ", rightColumn)
+
 	header := lipgloss.NewStyle().Bold(true).Render("BABYSITTER TUI")
 
-	helpBar := helpKeyStyle.Render(m.sessionsList.HelpText())
+	helpBar := styles.KeyHint.Render(m.sessionsList.HelpText())
 
 	return appStyle.Render(
 		lipgloss.JoinVertical(lipgloss.Left,

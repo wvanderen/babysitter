@@ -172,23 +172,6 @@ func TestControlsButtonNavigation(t *testing.T) {
 	}
 }
 
-func TestDefaultStyles(t *testing.T) {
-	styles := DefaultStyles()
-
-	if styles.Active == "" {
-		t.Error("Expected Active style to be set")
-	}
-	if styles.Idle == "" {
-		t.Error("Expected Idle style to be set")
-	}
-	if styles.Completed == "" {
-		t.Error("Expected Completed style to be set")
-	}
-	if styles.Failed == "" {
-		t.Error("Expected Failed style to be set")
-	}
-}
-
 func TestFormatSession(t *testing.T) {
 	s := Session{
 		ID:       "sess-1",

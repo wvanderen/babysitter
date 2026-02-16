@@ -20,7 +20,7 @@ func main() {
 		apiURL      = flag.String("api", defaultAPIURL, "Daemon API URL")
 		wsURL       = flag.String("ws", "", "WebSocket URL (defaults to ws://<api-host>/ws)")
 		sessionID   = flag.String("session", "", "Session ID to select on start")
-		connect     = flag.Bool("connect", false, "Auto-connect to WebSocket on start")
+		noConnect   = flag.Bool("no-connect", false, "Disable auto WebSocket connection")
 		showVer     = flag.Bool("version", false, "Show version and exit")
 		noAltScreen = flag.Bool("no-alt-screen", false, "Disable alternate screen buffer")
 	)
@@ -40,7 +40,7 @@ func main() {
 	if *sessionID != "" {
 		config["session_id"] = *sessionID
 	}
-	if *connect {
+	if !*noConnect {
 		config["auto_connect"] = true
 	}
 

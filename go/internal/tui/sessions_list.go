@@ -4,18 +4,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-)
-
-var (
-	sessionTitleStyle = lipgloss.NewStyle().Background(lipgloss.Color("62")).Foreground(lipgloss.Color("230")).Padding(0, 1)
-	selectedStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("170")).Bold(true)
-	statusActiveStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-	statusIdleStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
-	statusDoneStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("86"))
-	statusFailedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
-	helpStyle         = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
-	tableHeaderStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Bold(true)
-	tableCellStyle    = lipgloss.NewStyle()
+	"github.com/wvanderen/babysitter/go/internal/styles"
 )
 
 type SessionItem struct {
@@ -72,18 +61,14 @@ func (s SessionList) Update(msg interface{}) (SessionList, error) {
 }
 
 func (s SessionList) View() string {
-	borderColor := "62"
-	if !s.focused {
-		borderColor = "240"
+	boxStyle := styles.PanelInactive
+	if s.focused {
+		boxStyle = styles.PanelActive
 	}
-	boxStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color(borderColor)).
-		Padding(0, 1)
 
-	headerRow := tableHeaderStyle.Render("ID") + strings.Repeat(" ", 20) +
-		tableHeaderStyle.Render("STATUS") + strings.Repeat(" ", 15) +
-		tableHeaderStyle.Render("STARTED")
+	headerRow := styles.Muted.Bold(true).Render("ID") + strings.Repeat(" ", 20) +
+		styles.Muted.Bold(true).Render("STATUS") + strings.Repeat(" ", 15) +
+		styles.Muted.Bold(true).Render("STARTED")
 
 	if s.width < 10 {
 		s.width = 80
@@ -111,9 +96,9 @@ func (s SessionList) View() string {
 			startedCell = "-"
 		}
 
-		rowStyle := tableCellStyle
+		rowStyle := styles.ListItemNormal
 		if i == s.selected && s.focused {
-			rowStyle = selectedStyle
+			rowStyle = styles.ListItemSelected
 		}
 
 		row := rowStyle.Render(idCell) + rowStyle.Render(statusCell) + rowStyle.Render(startedCell)
@@ -158,13 +143,13 @@ func (s SessionList) HelpText() string {
 func FormatStatus(status string) string {
 	switch strings.ToLower(status) {
 	case "running", "active":
-		return statusActiveStyle.Render("● " + status)
+		return styles.StatusRunning.Render("● " + status)
 	case "idle", "pending":
-		return statusIdleStyle.Render("○ " + status)
+		return styles.StatusPending.Render("○ " + status)
 	case "completed", "success", "done":
-		return statusDoneStyle.Render("✓ " + status)
+		return styles.StatusCompleted.Render("✓ " + status)
 	case "failed", "error":
-		return statusFailedStyle.Render("✗ " + status)
+		return styles.StatusFailed.Render("✗ " + status)
 	default:
 		return status
 	}

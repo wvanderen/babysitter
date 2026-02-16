@@ -11,22 +11,6 @@ type Session struct {
 	Output   []string
 }
 
-type Styles struct {
-	Active    string
-	Idle      string
-	Completed string
-	Failed    string
-}
-
-func DefaultStyles() Styles {
-	return Styles{
-		Active:    "●",
-		Idle:      "○",
-		Completed: "✓",
-		Failed:    "✗",
-	}
-}
-
 func FormatSessionList(sessions []Session) string {
 	if len(sessions) == 0 {
 		return "No active sessions"

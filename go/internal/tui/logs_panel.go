@@ -9,38 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/wvanderen/babysitter/go/internal/client"
-)
-
-var (
-	logsPanelBoxStyle = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(lipgloss.Color("62")).
-				Padding(0, 1)
-
-	logsPanelTitleStyle = lipgloss.NewStyle().
-				Background(lipgloss.Color("62")).
-				Foreground(lipgloss.Color("230")).
-				Padding(0, 1)
-
-	logsHeaderStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("33"))
-
-	logsTimestampStyle = lipgloss.NewStyle().
-				Faint(true).
-				Foreground(lipgloss.Color("240"))
-
-	logsErrorStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("196"))
-
-	logsSuccessStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("42"))
-
-	logsCommandStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("214"))
-
-	logsPromptStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("183"))
+	"github.com/wvanderen/babysitter/go/internal/styles"
 )
 
 type LogsPanel struct {
@@ -204,7 +173,7 @@ func (l *LogsPanel) updateViewport() {
 
 func (l *LogsPanel) renderLogs() string {
 	if len(l.logs) == 0 {
-		return lipgloss.NewStyle().Faint(true).Render("  No logs available")
+		return styles.Muted.Render("  No logs available")
 	}
 
 	var lines []string
@@ -224,11 +193,11 @@ func (l *LogsPanel) renderLogEntry(entry LogEntry, index int) string {
 	if entry.StageType != "" {
 		header += fmt.Sprintf(" (%s)", entry.StageType)
 	}
-	lines = append(lines, logsHeaderStyle.Render(header))
+	lines = append(lines, styles.Title.Render(header))
 
 	if !entry.Timestamp.IsZero() {
 		ts := entry.Timestamp.Format("15:04:05")
-		lines = append(lines, logsTimestampStyle.Render(fmt.Sprintf("      %s", ts)))
+		lines = append(lines, styles.Muted.Render(fmt.Sprintf("      %s", ts)))
 	}
 
 	if entry.Input != "" {
@@ -236,10 +205,10 @@ func (l *LogsPanel) renderLogEntry(entry LogEntry, index int) string {
 		var style lipgloss.Style
 		if entry.EventType == "prompt" || entry.StageType == "agent" {
 			label = "Prompt"
-			style = logsPromptStyle
+			style = lipgloss.NewStyle().Foreground(styles.Accent)
 		} else {
 			label = "Command"
-			style = logsCommandStyle
+			style = lipgloss.NewStyle().Foreground(styles.Warning)
 		}
 		lines = append(lines, fmt.Sprintf("    %s:", label))
 		lines = append(lines, style.Render(fmt.Sprintf("      %s", truncateString(entry.Input, 80))))
@@ -262,10 +231,10 @@ func (l *LogsPanel) renderLogEntry(entry LogEntry, index int) string {
 			var statusStyle lipgloss.Style
 			if v.Status == "passed" || v.Status == "success" {
 				statusIcon = "✓"
-				statusStyle = logsSuccessStyle
+				statusStyle = styles.StatusCompleted
 			} else {
 				statusIcon = "✗"
-				statusStyle = logsErrorStyle
+				statusStyle = styles.StatusFailed
 			}
 			line := fmt.Sprintf("      %s %s", statusIcon, v.Type)
 			if v.Message != "" {
@@ -276,38 +245,28 @@ func (l *LogsPanel) renderLogEntry(entry LogEntry, index int) string {
 	}
 
 	if entry.Error != "" {
-		lines = append(lines, logsErrorStyle.Render(fmt.Sprintf("    Error: %s", truncateString(entry.Error, 80))))
+		lines = append(lines, styles.StatusFailed.Render(fmt.Sprintf("    Error: %s", truncateString(entry.Error, 80))))
 	}
 
 	if entry.DurationMs > 0 {
-		lines = append(lines, logsTimestampStyle.Render(fmt.Sprintf("    Duration: %s", FormatDuration(entry.DurationMs))))
+		lines = append(lines, styles.Muted.Render(fmt.Sprintf("    Duration: %s", FormatDuration(entry.DurationMs))))
 	}
 
 	return strings.Join(lines, "\n")
 }
 
 func (l LogsPanel) View() string {
-	borderColor := "62"
-	if !l.focused {
-		borderColor = "240"
+	boxStyle := styles.PanelInactive
+	if l.focused {
+		boxStyle = styles.PanelActive
 	}
-
-	boxStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color(borderColor)).
-		Padding(0, 1)
-
-	titleStyle := lipgloss.NewStyle().
-		Background(lipgloss.Color(borderColor)).
-		Foreground(lipgloss.Color("230")).
-		Padding(0, 1)
 
 	title := " Detailed Logs "
 
 	content := l.viewport.View()
 
 	return lipgloss.JoinVertical(lipgloss.Left,
-		titleStyle.Render(title),
+		styles.PanelHeader.Render(title),
 		boxStyle.Render(content),
 	)
 }

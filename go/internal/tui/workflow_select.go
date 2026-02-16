@@ -7,10 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/wvanderen/babysitter/go/internal/client"
-)
-
-var (
-	workflowTitleStyle = lipgloss.NewStyle().Background(lipgloss.Color("62")).Foreground(lipgloss.Color("230")).Padding(0, 1)
+	"github.com/wvanderen/babysitter/go/internal/styles"
 )
 
 type WorkflowItem struct {
@@ -43,7 +40,8 @@ func NewWorkflowSelect() WorkflowSelect {
 	l.Title = "Select Workflow"
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(true)
-	l.Styles.Title = workflowTitleStyle
+	l.Styles.Title = styles.PanelHeader
+	l.Styles.TitleBar = lipgloss.NewStyle().Padding(0, 0, 0, 1)
 
 	return WorkflowSelect{
 		list:    l,
@@ -106,7 +104,7 @@ func (w WorkflowSelect) Update(msg tea.Msg) (WorkflowSelect, tea.Cmd) {
 
 func (w WorkflowSelect) View() string {
 	if w.err != nil {
-		return w.list.View() + "\n\nError: " + w.err.Error()
+		return w.list.View() + "\n\n" + styles.StatusFailed.Render("Error: "+w.err.Error())
 	}
 	return w.list.View()
 }

@@ -5,19 +5,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
-)
-
-var (
-	outputBoxStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("62")).
-			Padding(0, 1)
-
-	outputTitleStyle = lipgloss.NewStyle().
-				Background(lipgloss.Color("62")).
-				Foreground(lipgloss.Color("230")).
-				Padding(0, 1)
+	"github.com/wvanderen/babysitter/go/internal/styles"
 )
 
 type OutputViewer struct {
@@ -81,28 +69,15 @@ func (o *OutputViewer) updateViewport() {
 }
 
 func (o OutputViewer) View() string {
-	borderColor := "62"
-	if !o.focused {
-		borderColor = "240"
+	boxStyle := styles.PanelInactive
+	if o.focused {
+		boxStyle = styles.PanelActive
 	}
 
-	boxStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color(borderColor)).
-		Padding(0, 1)
-
-	titleStyle := lipgloss.NewStyle().
-		Background(lipgloss.Color(borderColor)).
-		Foreground(lipgloss.Color("230")).
-		Padding(0, 1)
-
-	title := titleStyle.Render(" " + o.title + " ")
+	title := styles.PanelHeader.Render(" " + o.title + " ")
 	content := o.viewport.View()
 
-	box := lipgloss.JoinVertical(lipgloss.Left,
-		title,
-		boxStyle.Render(content),
-	)
+	box := strings.Join([]string{title, boxStyle.Render(content)}, "\n")
 	return box
 }
 

@@ -4,12 +4,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-)
-
-var (
-	formTitleStyle = lipgloss.NewStyle().Background(lipgloss.Color("62")).Foreground(lipgloss.Color("230")).Padding(0, 1)
-	formStyle      = lipgloss.NewStyle().Padding(1, 2)
-	labelStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	"github.com/wvanderen/babysitter/go/internal/styles"
 )
 
 type NewSession struct {
@@ -70,12 +65,14 @@ func (n NewSession) Update(msg tea.Msg) (NewSession, tea.Cmd) {
 
 func (n NewSession) View() string {
 	title := "New Session: " + n.workflowName
-	issueField := labelStyle.Render("Issue ID:") + " " + n.issueID.View()
+	issueField := styles.Muted.Render("Issue ID:") + " " + n.issueID.View()
+
+	formStyle := lipgloss.NewStyle().Padding(1, 2)
 
 	return formStyle.Render(
-		formTitleStyle.Render(title) + "\n\n" +
+		styles.PanelHeader.Render(title) + "\n\n" +
 			issueField + "\n\n" +
-			helpStyle.Render("[Enter] Start  [Esc] Cancel"),
+			styles.Muted.Render("[Enter] Start  [Esc] Cancel"),
 	)
 }
 

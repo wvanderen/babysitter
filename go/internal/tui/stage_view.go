@@ -6,18 +6,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/wvanderen/babysitter/go/internal/client"
-)
-
-var (
-	stageViewBoxStyle = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(lipgloss.Color("62")).
-				Padding(0, 1)
-
-	stageViewTitleStyle = lipgloss.NewStyle().
-				Background(lipgloss.Color("62")).
-				Foreground(lipgloss.Color("230")).
-				Padding(0, 1)
+	"github.com/wvanderen/babysitter/go/internal/styles"
 )
 
 type StageView struct {
@@ -51,12 +40,12 @@ func (s *StageView) SetHistory(history []client.ExecutionHistoryItem) {
 
 func (s *StageView) renderCurrentStage() string {
 	if s.instance == nil {
-		return lipgloss.NewStyle().Faint(true).Render("  No active stage")
+		return styles.Muted.Render("  No active stage")
 	}
 
 	current := s.instance.CurrentStage
 	if current == "" {
-		return lipgloss.NewStyle().Faint(true).Render("  Workflow completed")
+		return styles.Muted.Render("  Workflow completed")
 	}
 
 	var stageType string
@@ -67,10 +56,9 @@ func (s *StageView) renderCurrentStage() string {
 		}
 	}
 
-	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("33"))
-	stageLine := headerStyle.Render("  Current Stage: ") + current
+	stageLine := styles.Title.Render("  Current Stage: ") + current
 	if stageType != "" {
-		stageLine += lipgloss.NewStyle().Faint(true).Render(fmt.Sprintf(" (%s)", stageType))
+		stageLine += styles.Muted.Render(fmt.Sprintf(" (%s)", stageType))
 	}
 
 	statusLine := ""
@@ -81,7 +69,7 @@ func (s *StageView) renderCurrentStage() string {
 		}
 	}
 	if statusLine == "" {
-		statusLine = stageRunningStyle.Render("  ● Running...")
+		statusLine = styles.StatusRunning.Render("  ● Running...")
 	}
 
 	return stageLine + "\n" + statusLine
@@ -92,24 +80,24 @@ func (s *StageView) renderStageStatus(item client.ExecutionHistoryItem) string {
 
 	statusIcon := "●"
 	statusText := item.Status
-	statusStyle := stageRunningStyle
+	statusStyle := styles.StatusRunning
 
 	switch item.Status {
 	case "completed", "success":
 		statusIcon = "✓"
-		statusStyle = stageCompletedStyle
+		statusStyle = styles.StatusCompleted
 		statusText = "Completed"
 	case "failed", "failure":
 		statusIcon = "✗"
-		statusStyle = stageFailedStyle
+		statusStyle = styles.StatusFailed
 		statusText = "Failed"
 	case "skipped":
 		statusIcon = "○"
-		statusStyle = stageSkippedStyle
+		statusStyle = styles.StatusSkipped
 		statusText = "Skipped"
 	case "running", "active":
 		statusIcon = "●"
-		statusStyle = stageRunningStyle
+		statusStyle = styles.StatusRunning
 		statusText = "Running"
 	}
 
@@ -117,15 +105,14 @@ func (s *StageView) renderStageStatus(item client.ExecutionHistoryItem) string {
 	lines = append(lines, statusLine)
 
 	if item.DurationMs > 0 {
-		durationLine := lipgloss.NewStyle().Faint(true).Render(
+		durationLine := styles.Muted.Render(
 			fmt.Sprintf("    Duration: %s", FormatDuration(item.DurationMs)),
 		)
 		lines = append(lines, durationLine)
 	}
 
 	if item.Error != "" {
-		errorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
-		errorLine := errorStyle.Render(fmt.Sprintf("    Error: %s", truncateString(item.Error, 60)))
+		errorLine := styles.StatusFailed.Render(fmt.Sprintf("    Error: %s", truncateString(item.Error, 60)))
 		lines = append(lines, errorLine)
 	}
 
@@ -134,11 +121,11 @@ func (s *StageView) renderStageStatus(item client.ExecutionHistoryItem) string {
 
 func (s *StageView) renderHistory() string {
 	if len(s.history) == 0 {
-		return lipgloss.NewStyle().Faint(true).Render("  No execution history")
+		return styles.Muted.Render("  No execution history")
 	}
 
 	var lines []string
-	lines = append(lines, lipgloss.NewStyle().Bold(true).Render("  Execution History:"))
+	lines = append(lines, styles.Title.Render("  Execution History:"))
 	lines = append(lines, "")
 
 	for i, item := range s.history {
@@ -155,34 +142,33 @@ func (s *StageView) renderHistoryItem(item client.ExecutionHistoryItem, index in
 	switch item.Status {
 	case "completed", "success":
 		icon = "✓"
-		style = stageCompletedStyle
+		style = styles.StatusCompleted
 	case "failed", "failure":
 		icon = "✗"
-		style = stageFailedStyle
+		style = styles.StatusFailed
 	case "skipped":
 		icon = "○"
-		style = stageSkippedStyle
+		style = styles.StatusSkipped
 	default:
 		icon = "●"
-		style = stageRunningStyle
+		style = styles.StatusRunning
 	}
 
 	var parts []string
 	parts = append(parts, style.Render(fmt.Sprintf("  %d. %s %s", index, icon, item.StageID)))
 
 	if item.StageType != "" {
-		parts = append(parts, lipgloss.NewStyle().Faint(true).Render(fmt.Sprintf("[%s]", item.StageType)))
+		parts = append(parts, styles.Muted.Render(fmt.Sprintf("[%s]", item.StageType)))
 	}
 
 	if item.DurationMs > 0 {
-		parts = append(parts, lipgloss.NewStyle().Faint(true).Render(fmt.Sprintf("(%s)", FormatDuration(item.DurationMs))))
+		parts = append(parts, styles.Muted.Render(fmt.Sprintf("(%s)", FormatDuration(item.DurationMs))))
 	}
 
 	line := strings.Join(parts, " ")
 
 	if item.Error != "" {
-		errorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Faint(true)
-		line += "\n" + errorStyle.Render(fmt.Sprintf("      └─ %s", truncateString(item.Error, 50)))
+		line += "\n" + styles.Muted.Foreground(styles.Error).Render(fmt.Sprintf("      └─ %s", truncateString(item.Error, 50)))
 	}
 
 	return line
@@ -195,13 +181,13 @@ func (s *StageView) renderRetryInfo() string {
 
 	var lines []string
 	lines = append(lines, "")
-	lines = append(lines, lipgloss.NewStyle().Bold(true).Render("  Retry Information:"))
+	lines = append(lines, styles.Title.Render("  Retry Information:"))
 
 	retryLine := fmt.Sprintf("    Retries: %d / %d", s.instance.RetryCount, s.instance.MaxRetries)
 	if s.instance.RetryCount >= s.instance.MaxRetries {
-		retryLine = stageFailedStyle.Render(retryLine + " (max reached)")
+		retryLine = styles.StatusFailed.Render(retryLine + " (max reached)")
 	} else {
-		retryLine = lipgloss.NewStyle().Faint(true).Render(retryLine)
+		retryLine = styles.Muted.Render(retryLine)
 	}
 	lines = append(lines, retryLine)
 
@@ -209,20 +195,10 @@ func (s *StageView) renderRetryInfo() string {
 }
 
 func (s StageView) View() string {
-	borderColor := "62"
-	if !s.focused {
-		borderColor = "240"
+	boxStyle := styles.PanelInactive
+	if s.focused {
+		boxStyle = styles.PanelActive
 	}
-
-	boxStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color(borderColor)).
-		Padding(0, 1)
-
-	titleStyle := lipgloss.NewStyle().
-		Background(lipgloss.Color(borderColor)).
-		Foreground(lipgloss.Color("230")).
-		Padding(0, 1)
 
 	title := " Stage Progress "
 
@@ -242,7 +218,7 @@ func (s StageView) View() string {
 	content := strings.Join(sections, "\n")
 
 	return lipgloss.JoinVertical(lipgloss.Left,
-		titleStyle.Render(title),
+		styles.PanelHeader.Render(title),
 		boxStyle.Render(content),
 	)
 }

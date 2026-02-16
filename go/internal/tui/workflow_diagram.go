@@ -6,37 +6,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/wvanderen/babysitter/go/internal/client"
-)
-
-var (
-	diagramBoxStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("62")).
-			Padding(0, 1)
-
-	diagramTitleStyle = lipgloss.NewStyle().
-				Background(lipgloss.Color("62")).
-				Foreground(lipgloss.Color("230")).
-				Padding(0, 1)
-
-	stagePendingStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("240"))
-
-	stageRunningStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("33")).
-				Bold(true)
-
-	stageCompletedStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("42"))
-
-	stageFailedStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("196"))
-
-	stageSkippedStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("214"))
-
-	transitionStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("240"))
+	"github.com/wvanderen/babysitter/go/internal/styles"
 )
 
 type WorkflowDiagram struct {
@@ -148,19 +118,19 @@ func (d *WorkflowDiagram) renderStage(stageID string, status string) string {
 	switch status {
 	case "running":
 		icon = "●"
-		style = stageRunningStyle
+		style = styles.StatusRunning
 	case "completed", "success":
 		icon = "✓"
-		style = stageCompletedStyle
+		style = styles.StatusCompleted
 	case "failed", "failure":
 		icon = "✗"
-		style = stageFailedStyle
+		style = styles.StatusFailed
 	case "skipped":
 		icon = "○"
-		style = stageSkippedStyle
+		style = styles.StatusSkipped
 	default:
 		icon = "○"
-		style = stagePendingStyle
+		style = styles.StatusPending
 	}
 
 	return style.Render(fmt.Sprintf("  %s %s", icon, stageID))
@@ -173,12 +143,12 @@ func (d *WorkflowDiagram) renderTransition(fromStage, toStage string, isFailure 
 	} else {
 		arrow = "  └─[ok]→ "
 	}
-	return transitionStyle.Render(arrow) + lipgloss.NewStyle().Faint(true).Render(toStage)
+	return styles.Muted.Render(arrow) + styles.Subtle.Render(toStage)
 }
 
 func (d *WorkflowDiagram) renderDiagram() string {
 	if d.workflow == nil {
-		return lipgloss.NewStyle().Faint(true).Render("  No workflow loaded")
+		return styles.Muted.Render("  No workflow loaded")
 	}
 
 	var lines []string
@@ -233,24 +203,14 @@ func (d *WorkflowDiagram) renderProgress() string {
 		progressParts = append(progressParts, fmt.Sprintf("Failed: %d", failed))
 	}
 
-	return lipgloss.NewStyle().Faint(true).Render("  " + strings.Join(progressParts, " | "))
+	return styles.Muted.Render("  " + strings.Join(progressParts, " | "))
 }
 
 func (d WorkflowDiagram) View() string {
-	borderColor := "62"
-	if !d.focused {
-		borderColor = "240"
+	boxStyle := styles.PanelInactive
+	if d.focused {
+		boxStyle = styles.PanelActive
 	}
-
-	boxStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color(borderColor)).
-		Padding(0, 1)
-
-	titleStyle := lipgloss.NewStyle().
-		Background(lipgloss.Color(borderColor)).
-		Foreground(lipgloss.Color("230")).
-		Padding(0, 1)
 
 	title := " Workflow Diagram "
 	if d.workflow != nil && d.workflow.Name != "" {
@@ -268,7 +228,7 @@ func (d WorkflowDiagram) View() string {
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left,
-		titleStyle.Render(title),
+		styles.PanelHeader.Render(title),
 		boxStyle.Render(content),
 	)
 }

@@ -45,6 +45,7 @@ type Session struct {
 	FailureReason     *string                `json:"failure_reason"`
 	EscalationReason  *string                `json:"escalation_reason"`
 	ValidationResults map[string]interface{} `json:"validation_results"`
+	WorkflowInstance  *WorkflowInstance      `json:"workflow_instance"`
 }
 
 type SessionList struct {
@@ -248,15 +249,15 @@ type WorkflowInstance struct {
 }
 
 type ExecutionHistoryItem struct {
-	StageID     string                 `json:"stage_id"`
-	StageType   string                 `json:"stage_type"`
-	Status      string                 `json:"status"`
-	StartedAt   string                 `json:"started_at"`
-	CompletedAt string                 `json:"completed_at"`
-	Output      string                 `json:"output"`
-	Error       string                 `json:"error"`
-	DurationMs  int64                  `json:"duration_ms"`
-	Metadata    map[string]interface{} `json:"metadata"`
+	StageID    string                 `json:"stage_id"`
+	StageType  string                 `json:"stage_type"`
+	Status     string                 `json:"status"`
+	StartedAt  string                 `json:"started_at"`
+	FinishedAt string                 `json:"finished_at"`
+	Output     string                 `json:"output"`
+	Error      string                 `json:"error"`
+	DurationMs int64                  `json:"duration_ms"`
+	Metadata   map[string]interface{} `json:"metadata"`
 }
 
 func (c *Client) ExecuteWorkflow(workflowID string) error {
@@ -338,7 +339,7 @@ type WSClient struct {
 }
 
 func (c *Client) ConnectWebSocket(onMessage func(WSMessage)) error {
-	wsURL := "ws" + c.baseURL[4:] + "/ws"
+	wsURL := "ws" + c.baseURL[4:] + "/socket/websocket"
 
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
@@ -359,7 +360,7 @@ func (c *Client) ConnectWebSocket(onMessage func(WSMessage)) error {
 }
 
 func (c *Client) WebSocket() (*WSClient, error) {
-	wsURL := "ws" + c.baseURL[4:] + "/ws"
+	wsURL := "ws" + c.baseURL[4:] + "/socket/websocket"
 
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
@@ -394,6 +395,12 @@ func (ws *WSClient) readLoop() {
 
 func (ws *WSClient) OnMessage(handler func(WSMessage)) {
 	ws.onMessage = handler
+}
+
+func (ws *WSClient) ReadMessage() (WSMessage, error) {
+	var msg WSMessage
+	err := ws.conn.ReadJSON(&msg)
+	return msg, err
 }
 
 func (ws *WSClient) JoinSession(sessionID string) error {

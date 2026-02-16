@@ -5,24 +5,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-)
-
-var (
-	controlStyle = lipgloss.NewStyle().
-			Padding(1, 2).
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("62"))
-
-	buttonStyle = lipgloss.NewStyle().
-			Padding(0, 2).
-			Foreground(lipgloss.Color("170"))
-
-	buttonActiveStyle = lipgloss.NewStyle().
-				Padding(0, 2).
-				Background(lipgloss.Color("62")).
-				Foreground(lipgloss.Color("230"))
-
-	helpKeyStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("86"))
+	"github.com/wvanderen/babysitter/go/internal/styles"
 )
 
 type ControlAction int
@@ -134,31 +117,19 @@ func (c Controls) executeSelectedButton() tea.Cmd {
 }
 
 func (c Controls) View() string {
-	borderColor := "62"
-	if !c.focused {
-		borderColor = "240"
+	ctrlStyle := styles.PanelInactive
+	if c.focused {
+		ctrlStyle = styles.PanelActive
 	}
-
-	activeBtnStyle := lipgloss.NewStyle().
-		Padding(0, 2).
-		Background(lipgloss.Color(borderColor)).
-		Foreground(lipgloss.Color("230"))
-
-	inactiveBtnStyle := lipgloss.NewStyle().
-		Padding(0, 2).
-		Foreground(lipgloss.Color("170"))
 
 	var buttons []string
 	for i, btn := range c.buttons {
-		if i == c.selected && c.focused {
-			buttons = append(buttons, activeBtnStyle.Render(btn))
-		} else {
-			buttons = append(buttons, inactiveBtnStyle.Render(btn))
-		}
+		btnStyle := styles.ResolveButtonStyle(i == c.selected && c.focused, false, false)
+		buttons = append(buttons, btnStyle.Render(btn))
 	}
 
 	buttonRow := lipgloss.JoinHorizontal(lipgloss.Top, buttons...)
-	help := helpKeyStyle.Render(c.helpText)
+	help := styles.KeyHint.Render(c.helpText)
 
 	var statusLine string
 	if c.session != nil {
@@ -166,13 +137,8 @@ func (c Controls) View() string {
 			c.session.ID,
 			FormatStatus(c.session.Status))
 	} else {
-		statusLine = helpStyle.Render("No session selected")
+		statusLine = styles.Muted.Render("No session selected")
 	}
-
-	ctrlStyle := lipgloss.NewStyle().
-		Padding(1, 2).
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color(borderColor))
 
 	return ctrlStyle.Render(
 		lipgloss.JoinVertical(lipgloss.Left,
