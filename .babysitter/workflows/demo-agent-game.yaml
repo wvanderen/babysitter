@@ -5,7 +5,7 @@ intelligence: hybrid
 
 variables:
   game_dir: /tmp/fruit-merge-game
-  agent: claude
+  agent: pi
 
 stages:
   - id: setup

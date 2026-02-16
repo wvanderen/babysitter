@@ -251,15 +251,25 @@ func (l LogDetailOverlay) ViewWithOverlay() string {
 		return ""
 	}
 
-	modalW := min(l.width-4, 80)
-	modalH := min(l.height-4, 30)
+	maxW := l.width - 8
+	maxH := l.height - 4
+	if maxW < 20 {
+		maxW = 20
+	}
+	if maxH < 10 {
+		maxH = 10
+	}
+
+	modalW := min(maxW, 80)
+	modalH := min(maxH, 25)
 
 	boxStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(styles.Accent).
 		Padding(1, 2).
 		Width(modalW).
-		Height(modalH)
+		Height(modalH).
+		MaxHeight(l.height - 2)
 
 	centeredModal := lipgloss.NewStyle().
 		Width(l.width).
