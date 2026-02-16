@@ -457,6 +457,13 @@ func (l *LogsPanel) Clear() {
 	l.scrollOff = 0
 }
 
+func (l *LogsPanel) SelectedEntry() *LogEntry {
+	if len(l.logs) == 0 || l.selectedIdx < 0 || l.selectedIdx >= len(l.logs) {
+		return nil
+	}
+	return &l.logs[l.selectedIdx]
+}
+
 func FormatLogsFromInstance(instance *client.WorkflowInstance) string {
 	panel := NewLogsPanel()
 	panel.SetInstance(instance)

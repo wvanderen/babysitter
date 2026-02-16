@@ -27,6 +27,7 @@ const (
 	ViewNormal ViewState = iota
 	ViewWorkflowSelect
 	ViewNewSession
+	ViewLogDetail
 )
 
 var (
@@ -36,41 +37,43 @@ var (
 )
 
 type AppModel struct {
-	sidebar         Sidebar
-	workflowDiagram WorkflowDiagram
-	logsPanel       LogsPanel
-	outputViewer    OutputViewer
-	workflowSelect  WorkflowSelect
-	newSession      *NewSession
-	focus           FocusArea
-	viewState       ViewState
-	client          *client.Client
-	wsClient        *client.WSClient
-	sessions        []client.Session
-	currentInstance *client.WorkflowInstance
-	currentWorkflow *client.Workflow
-	connected       bool
-	quitting        bool
-	err             error
-	width           int
-	height          int
+	sidebar          Sidebar
+	workflowDiagram  WorkflowDiagram
+	logsPanel        LogsPanel
+	outputViewer     OutputViewer
+	workflowSelect   WorkflowSelect
+	newSession       *NewSession
+	logDetailOverlay LogDetailOverlay
+	focus            FocusArea
+	viewState        ViewState
+	client           *client.Client
+	wsClient         *client.WSClient
+	sessions         []client.Session
+	currentInstance  *client.WorkflowInstance
+	currentWorkflow  *client.Workflow
+	connected        bool
+	quitting         bool
+	err              error
+	width            int
+	height           int
 }
 
 func NewAppModel(apiClient *client.Client) AppModel {
 	return AppModel{
-		sidebar:         NewSidebar(),
-		workflowDiagram: NewWorkflowDiagram(),
-		logsPanel:       NewLogsPanel(),
-		outputViewer:    NewOutputViewer(),
-		workflowSelect:  NewWorkflowSelect(),
-		focus:           FocusSidebar,
-		viewState:       ViewNormal,
-		client:          apiClient,
-		sessions:        []client.Session{},
-		connected:       false,
-		quitting:        false,
-		width:           120,
-		height:          40,
+		sidebar:          NewSidebar(),
+		workflowDiagram:  NewWorkflowDiagram(),
+		logsPanel:        NewLogsPanel(),
+		outputViewer:     NewOutputViewer(),
+		workflowSelect:   NewWorkflowSelect(),
+		logDetailOverlay: NewLogDetailOverlay(),
+		focus:            FocusSidebar,
+		viewState:        ViewNormal,
+		client:           apiClient,
+		sessions:         []client.Session{},
+		connected:        false,
+		quitting:         false,
+		width:            120,
+		height:           40,
 	}
 }
 
@@ -159,6 +162,33 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		if m.viewState == ViewLogDetail {
+			switch msg.String() {
+			case "esc", "q", "v":
+				m.viewState = ViewNormal
+				return m, nil
+			case "j", "down":
+				m.logDetailOverlay.ScrollDown()
+				return m, nil
+			case "k", "up":
+				m.logDetailOverlay.ScrollUp()
+				return m, nil
+			case "ctrl+d":
+				m.logDetailOverlay.ScrollHalfPageDown()
+				return m, nil
+			case "ctrl+u":
+				m.logDetailOverlay.ScrollHalfPageUp()
+				return m, nil
+			case "g":
+				m.logDetailOverlay.ScrollToTop()
+				return m, nil
+			case "G":
+				m.logDetailOverlay.ScrollToBottom()
+				return m, nil
+			}
+			return m, nil
+		}
+
 		switch msg.String() {
 		case "ctrl+c", "q":
 			m.quitting = true
@@ -171,6 +201,14 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.viewState == ViewNormal {
 				m.viewState = ViewWorkflowSelect
 				return m, m.fetchWorkflows()
+			}
+		case "v":
+			if m.focus == FocusLogsPanel && m.viewState == ViewNormal {
+				if entry := m.logsPanel.SelectedEntry(); entry != nil {
+					m.logDetailOverlay.SetEntry(entry)
+					m.logDetailOverlay.SetSize(m.width-8, m.height-8)
+					m.viewState = ViewLogDetail
+				}
 			}
 		case "up", "k":
 			if m.focus == FocusSidebar {
@@ -461,10 +499,11 @@ func (m AppModel) View() string {
 		cmds = append(cmds, keymap.Command{ID: "logs-up", Name: "Up", Key: "↑", Priority: 2})
 		cmds = append(cmds, keymap.Command{ID: "logs-down", Name: "Down", Key: "↓", Priority: 2})
 		cmds = append(cmds, keymap.Command{ID: "logs-expand", Name: "Expand", Key: "Enter", Priority: 3})
+		cmds = append(cmds, keymap.Command{ID: "logs-view", Name: "View", Key: "v", Priority: 4})
 	}
 	helpBar := styles.KeyHint.Render(keymap.RenderHints(cmds, m.width-4))
 
-	return appStyle.Render(
+	baseView := appStyle.Render(
 		lipgloss.JoinVertical(lipgloss.Left,
 			header,
 			"",
@@ -474,6 +513,13 @@ func (m AppModel) View() string {
 			errView,
 		),
 	)
+
+	if m.viewState == ViewLogDetail {
+		m.logDetailOverlay.SetSize(m.width, m.height)
+		return m.logDetailOverlay.ViewWithOverlay()
+	}
+
+	return baseView
 }
 
 func (m *AppModel) SetSessions(sessions []client.Session) {
