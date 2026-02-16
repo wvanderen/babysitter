@@ -281,4 +281,36 @@ defmodule Babysitter.StageExecutorTest do
       assert StageExecutor.Result.timeout?(result)
     end
   end
+
+  describe "output normalization for stability detection" do
+    test "strips ANSI codes from output" do
+      output_with_ansi = "\e[32mSuccess\e[0m \e[1mBold\e[0m"
+      result = StageExecutor.strip_ansi_codes(output_with_ansi)
+      assert result == "Success Bold"
+    end
+
+    test "strips box drawing characters" do
+      output_with_boxes = "┌───┐\n│ Hi │\n└───┘"
+      result = StageExecutor.strip_box_drawing(output_with_boxes)
+      refute String.contains?(result, "┌")
+      refute String.contains?(result, "│")
+      refute String.contains?(result, "└")
+    end
+
+    test "strips block characters used in progress bars" do
+      output_with_blocks = "Progress: ████████░░ 80%"
+      result = StageExecutor.strip_box_drawing(output_with_blocks)
+      refute String.contains?(result, "█")
+      refute String.contains?(result, "░")
+    end
+
+    test "normalize_for_stability combines all normalizations" do
+      complex_output = "\e[32m┌─────┐\e[0m\n\e[1m│ Done │\e[0m\n\e[32m└─────┘\e[0m  "
+      result = StageExecutor.normalize_for_stability(complex_output)
+      refute String.contains?(result, "\e")
+      refute String.contains?(result, "┌")
+      refute String.contains?(result, "│")
+      assert String.contains?(result, "Done")
+    end
+  end
 end

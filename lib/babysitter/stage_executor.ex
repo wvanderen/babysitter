@@ -543,7 +543,7 @@ defmodule Babysitter.StageExecutor do
   end
 
   defp poll_for_agent_completion(tmux_name, started, max_wait, poll_interval) do
-    stable_threshold = 3000
+    stable_threshold = 5000
     do_poll_for_agent(tmux_name, started, max_wait, poll_interval, stable_threshold, nil, 0)
   end
 
@@ -569,8 +569,11 @@ defmodule Babysitter.StageExecutor do
 
       case Tmux.capture_pane(tmux_name) do
         output when is_binary(output) ->
+          normalized = normalize_for_stability(output)
+          last_normalized = if last_output, do: normalize_for_stability(last_output), else: nil
+
           new_stable_ms =
-            if output == last_output do
+            if normalized == last_normalized do
               stable_ms + poll_interval
             else
               0
@@ -594,6 +597,27 @@ defmodule Babysitter.StageExecutor do
           error
       end
     end
+  end
+
+  @doc false
+  def normalize_for_stability(output) when is_binary(output) do
+    output
+    |> strip_ansi_codes()
+    |> strip_box_drawing()
+    |> String.trim()
+  end
+
+  @doc false
+  def strip_ansi_codes(output) do
+    Regex.replace(~r/\x1b\[[0-9;]*[a-zA-Z]/, output, "")
+  end
+
+  @doc false
+  def strip_box_drawing(output) do
+    output
+    |> String.replace(~r/[─│┌┐└┘├┤┬┴┼╭╮╯╰╱╲╳]/, "")
+    |> String.replace(~r/[▀▄█▓▒░]/, "")
+    |> String.replace(~r/[►◄▲▼]/, "")
   end
 
   defp wait_for_completion(tmux_name, started_at, poll_interval, max_wait, completion_check) do
