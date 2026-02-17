@@ -25,6 +25,10 @@ defmodule Babysitter.Config do
       opencode: %{
         command: "opencode",
         args: []
+      },
+      pi: %{
+        command: "pi",
+        args: ["--no-session"]
       }
     },
     git: %{
@@ -205,6 +209,10 @@ defmodule Babysitter.Config do
       opencode:
         command: opencode
         args: []
+      pi:
+        command: pi
+        args:
+          - --no-session
 
     git:
       commit_strategy:

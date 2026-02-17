@@ -279,7 +279,9 @@ defmodule Babysitter.StageExecutor do
          :ok <- validate_stage_type(stage, :agent),
          :ok <- Session.ensure_agent_started(session_id),
          {:ok, command} <- build_command(stage, opts) do
-      case run_in_tmux(session.tmux_name, command, opts) do
+      opts_with_agent = Keyword.put(opts, :agent, session.agent)
+
+      case run_in_tmux(session.tmux_name, command, opts_with_agent) do
         {:ok, {output, exit_code}} ->
           finished_at = DateTime.utc_now()
 
@@ -329,7 +331,7 @@ defmodule Babysitter.StageExecutor do
          :ok <- validate_stage_type(stage, :agent),
          :ok <- Session.ensure_agent_started(session_id),
          {:ok, command} <- build_command(stage, opts) do
-      :ok = Tmux.send_keys(session.tmux_name, command)
+      :ok = send_agent_prompt(session.tmux_name, command, session.agent)
 
       case wait_for_completion(
              session.tmux_name,
@@ -571,8 +573,9 @@ defmodule Babysitter.StageExecutor do
   defp run_in_tmux(tmux_name, command, opts) do
     max_wait = Keyword.get(opts, :max_wait, @default_max_wait)
     poll_interval = Keyword.get(opts, :poll_interval, @default_poll_interval)
+    agent = Keyword.get(opts, :agent)
 
-    :ok = Tmux.send_keys(tmux_name, command)
+    send_agent_prompt(tmux_name, command, agent)
 
     started = System.monotonic_time(:millisecond)
 
@@ -580,6 +583,16 @@ defmodule Babysitter.StageExecutor do
       {:ok, output} -> {:ok, {output, 0}}
       {:error, reason} -> {:error, reason}
     end
+  end
+
+  defp send_agent_prompt(tmux_name, command, :pi) do
+    :ok = Tmux.send_keys(tmux_name, command, enter: false)
+    Process.sleep(100)
+    :ok = Tmux.send_keys(tmux_name, "Enter", enter: false)
+  end
+
+  defp send_agent_prompt(tmux_name, command, _agent) do
+    :ok = Tmux.send_keys(tmux_name, command)
   end
 
   defp poll_for_agent_completion(tmux_name, started, max_wait, poll_interval) do
