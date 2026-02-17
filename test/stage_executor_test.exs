@@ -119,6 +119,47 @@ defmodule Babysitter.StageExecutorTest do
     end
   end
 
+  describe "execute_validation/3" do
+    test "validation stage validates session output", %{session_id: session_id} do
+      Babysitter.Session.append_output(session_id, "Build completed successfully")
+
+      stage =
+        Stage.validation(:check_output, [
+          Validation.output_contains("completed")
+        ])
+
+      assert {:ok, result} = StageExecutor.execute(stage, session_id)
+      assert result.status == :success
+      assert result.validation_errors == nil
+    end
+
+    test "validation stage fails when validation fails", %{session_id: session_id} do
+      Babysitter.Session.append_output(session_id, "Something happened")
+
+      stage =
+        Stage.validation(:check_fail, [
+          Validation.output_contains("SUCCESS")
+        ])
+
+      assert {:ok, result} = StageExecutor.execute(stage, session_id)
+      assert result.status == :failure
+      assert result.validation_errors != nil
+    end
+
+    test "validation stage with multiple validations", %{session_id: session_id} do
+      Babysitter.Session.append_output(session_id, "Tests passed: 10\nCoverage: 85%")
+
+      stage =
+        Stage.validation(:multi_check, [
+          Validation.output_contains("Tests passed"),
+          Validation.output_contains("Coverage")
+        ])
+
+      assert {:ok, result} = StageExecutor.execute(stage, session_id)
+      assert result.status == :success
+    end
+  end
+
   describe "validate_result/2" do
     test "passes when all validations pass" do
       result = %StageExecutor.Result{

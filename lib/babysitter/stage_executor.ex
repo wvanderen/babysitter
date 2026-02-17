@@ -86,6 +86,10 @@ defmodule Babysitter.StageExecutor do
     execute_decision(stage, session_id, opts)
   end
 
+  def execute(%Stage{type: :validation} = stage, session_id, opts) do
+    execute_validation(stage, session_id, opts)
+  end
+
   def execute(%Stage{} = stage, session_id, opts) do
     execute_agent(stage, session_id, opts)
   end
@@ -226,6 +230,40 @@ defmodule Babysitter.StageExecutor do
 
   def execute_decision(%Stage{type: type}, _session_id, _opts) do
     {:error, {:invalid_stage_type, expected: :decision, got: type}}
+  end
+
+  @doc """
+  Execute a validation stage.
+
+  Validation stages run validations against the session's accumulated output
+  without executing any command or prompt. Useful for checkpoint validations.
+  """
+  @spec execute_validation(Stage.t(), String.t(), keyword()) ::
+          {:ok, Result.t()} | {:error, term()}
+  def execute_validation(%Stage{type: :validation} = stage, session_id, _opts) do
+    started_at = DateTime.utc_now()
+
+    with {:ok, session} <- get_session(session_id) do
+      output = session.output_buffer || ""
+      finished_at = DateTime.utc_now()
+
+      result = %Result{
+        stage_id: stage.id,
+        session_id: session_id,
+        started_at: started_at,
+        finished_at: finished_at,
+        status: :success,
+        output: output,
+        exit_code: 0
+      }
+
+      result = run_validations(result, stage, session_id)
+      {:ok, result}
+    end
+  end
+
+  def execute_validation(%Stage{type: type}, _session_id, _opts) do
+    {:error, {:invalid_stage_type, expected: :validation, got: type}}
   end
 
   @doc """
