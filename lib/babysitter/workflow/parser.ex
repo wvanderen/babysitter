@@ -179,6 +179,7 @@ defmodule Babysitter.Workflow.Parser do
       stage = %Stage{
         id: id,
         type: type,
+        agent: parse_agent(stage_data[:agent]),
         name: stage_data[:name] && to_string(stage_data[:name]),
         prompt: stage_data[:prompt] || stage_data[:prompt_template],
         command: stage_data[:command] && to_string(stage_data[:command]),
@@ -214,6 +215,10 @@ defmodule Babysitter.Workflow.Parser do
       other -> {:error, {:invalid_stage_type, other}}
     end
   end
+
+  defp parse_agent(nil), do: nil
+  defp parse_agent(agent) when is_atom(agent), do: agent
+  defp parse_agent(agent) when is_binary(agent), do: String.to_atom(agent)
 
   defp parse_timeout(nil), do: :infinity
   defp parse_timeout(:infinity), do: :infinity
@@ -362,7 +367,7 @@ defmodule Babysitter.Workflow.Parser do
 
   defp extract_stage_metadata(stage_data) do
     reserved =
-      ~w[id type name prompt prompt_template command timeout validation validations on_success on_failure on_timeout]a
+      ~w[id type agent name prompt prompt_template command timeout validation validations on_success on_failure on_timeout]a
 
     stage_data
     |> Map.drop(reserved)

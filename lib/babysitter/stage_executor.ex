@@ -279,7 +279,8 @@ defmodule Babysitter.StageExecutor do
          :ok <- validate_stage_type(stage, :agent),
          :ok <- Session.ensure_agent_started(session_id),
          {:ok, command} <- build_command(stage, opts) do
-      opts_with_agent = Keyword.put(opts, :agent, session.agent)
+      agent = stage.agent || session.agent
+      opts_with_agent = Keyword.put(opts, :agent, agent)
 
       case run_in_tmux(session.tmux_name, command, opts_with_agent) do
         {:ok, {output, exit_code}} ->
@@ -331,7 +332,8 @@ defmodule Babysitter.StageExecutor do
          :ok <- validate_stage_type(stage, :agent),
          :ok <- Session.ensure_agent_started(session_id),
          {:ok, command} <- build_command(stage, opts) do
-      :ok = send_agent_prompt(session.tmux_name, command, session.agent)
+      agent = stage.agent || session.agent
+      :ok = send_agent_prompt(session.tmux_name, command, agent)
 
       case wait_for_completion(
              session.tmux_name,

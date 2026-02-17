@@ -87,6 +87,13 @@ defmodule Babysitter.StageExecutorTest do
       assert {:error, :empty_command} =
                StageExecutor.execute(stage, session_id)
     end
+
+    test "stage with agent option overrides session agent", %{session_id: session_id} do
+      stage = Stage.agent(:custom_agent, "echo 'Using custom agent'", agent: :opencode)
+
+      assert {:ok, result} = StageExecutor.execute(stage, session_id)
+      assert result.status == :success
+    end
   end
 
   describe "execute_and_wait/3" do

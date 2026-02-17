@@ -178,6 +178,39 @@ defmodule Babysitter.Workflow.ParserTest do
       assert stage.prompt == "Template content"
     end
 
+
+    test "parses stage with per-stage agent" do
+      yaml = """
+      id: test
+      name: Test
+      stages:
+        - id: custom
+          type: agent
+          agent: opencode
+          prompt: Do something
+      """
+
+      assert {:ok, workflow} = Parser.parse_string(yaml)
+      stage = workflow.stages[:custom]
+
+      assert stage.agent == :opencode
+    end
+
+    test "stage agent defaults to nil" do
+      yaml = """
+      id: test
+      name: Test
+      stages:
+        - id: noagent
+          type: agent
+          prompt: Do something
+      """
+
+      assert {:ok, workflow} = Parser.parse_string(yaml)
+      stage = workflow.stages[:noagent]
+
+      assert stage.agent == nil
+    end
     test "parses validation stage" do
       yaml = """
       id: test
