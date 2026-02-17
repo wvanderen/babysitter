@@ -385,6 +385,8 @@ defmodule Babysitter.StageExecutor do
   def run_validations(%Result{} = result, %Stage{validations: []}, _session_id), do: result
 
   def run_validations(%Result{} = result, %Stage{validations: validations}, session_id) do
+    Process.sleep(500)
+
     case validate_result(result, validations) do
       :ok ->
         result
