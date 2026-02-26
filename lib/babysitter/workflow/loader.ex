@@ -47,9 +47,6 @@ defmodule Babysitter.Workflow.Loader do
 
   defp safe_parse(file) do
     Parser.parse_file(file)
-  catch
-    :error, reason -> {:error, {:yaml_decode_error, reason}}
-    :throw, reason -> {:error, {:yaml_parse_error, reason}}
   end
 
   defp find_workflow_files(dir) do

@@ -114,7 +114,7 @@ defmodule Babysitter.Workflow.LoaderTest do
 
       [{failed_path, reason}] = failed_files
       assert failed_path =~ "invalid.yaml"
-      assert reason == {:missing_required_field, :stages}
+      assert match?({:invalid_yaml, _, %{reason: :missing_required_field}}, reason)
     end
 
     test "collects multiple failures" do
@@ -150,7 +150,7 @@ defmodule Babysitter.Workflow.LoaderTest do
       assert {:error, failed_files} = Loader.load_all(@temp_dir)
       assert length(failed_files) == 1
       [{_path, reason}] = failed_files
-      assert match?({:yaml_parse_error, _}, reason) or match?({:yaml_decode_error, _}, reason)
+      assert match?({:invalid_yaml, _, %{reason: _}}, reason)
     end
   end
 
@@ -182,7 +182,9 @@ defmodule Babysitter.Workflow.LoaderTest do
 
     test "returns error for non-existent file" do
       non_existent = Path.join(@temp_dir, "non_existent.yaml")
-      assert {:error, :file_not_found} = Loader.load_file(non_existent)
+
+      assert {:error, {:invalid_yaml, _, %{reason: :file_not_found}}} =
+               Loader.load_file(non_existent)
     end
 
     test "returns error for invalid yaml" do
@@ -195,7 +197,11 @@ defmodule Babysitter.Workflow.LoaderTest do
       File.write!(file_path, invalid_yaml)
 
       assert {:error, reason} = Loader.load_file(file_path)
-      assert reason == {:missing_required_field, :stages}
+
+      assert match?(
+               {:invalid_yaml, _, %{reason: :missing_required_field, field: :stages}},
+               reason
+             )
     end
   end
 

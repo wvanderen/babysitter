@@ -28,8 +28,12 @@ defmodule Babysitter.Workflow.Parser do
          {:ok, workflow} <- build_workflow(parsed) do
       {:ok, workflow}
     else
-      false -> {:error, :file_not_found}
-      error -> error
+      false ->
+        {:error,
+         {:invalid_yaml, path, %{reason: :file_not_found, message: "File not found: #{path}"}}}
+
+      error ->
+        error
     end
   end
 
@@ -93,13 +97,18 @@ defmodule Babysitter.Workflow.Parser do
         {:ok, atomize_keys(config)}
 
       {:error, _, _} = error ->
-        {:error, {:yaml_parse_error, error}}
+        {:error, format_yamerl_error(path, error)}
 
       [] ->
-        {:error, :empty_file}
+        {:error, {:invalid_yaml, path, %{reason: :empty_file, message: "YAML file is empty"}}}
     end
-  rescue
-    e -> {:error, {:yaml_decode_error, e}}
+  catch
+    :throw, {:yamerl_exception, errors} ->
+      {:error, format_yamerl_exception(path, errors)}
+
+    kind, reason ->
+      {:error,
+       {:invalid_yaml, path, %{reason: :decode_error, message: format_error_reason(kind, reason)}}}
   end
 
   defp decode_yaml_string(content) do
@@ -108,13 +117,19 @@ defmodule Babysitter.Workflow.Parser do
         {:ok, atomize_keys(config)}
 
       {:error, _, _} = error ->
-        {:error, {:yaml_parse_error, error}}
+        {:error, format_yamerl_error(nil, error)}
 
       [] ->
-        {:error, :empty_content}
+        {:error,
+         {:invalid_yaml, nil, %{reason: :empty_content, message: "YAML content is empty"}}}
     end
-  rescue
-    e -> {:error, {:yaml_decode_error, e}}
+  catch
+    :throw, {:yamerl_exception, errors} ->
+      {:error, format_yamerl_exception(nil, errors)}
+
+    kind, reason ->
+      {:error,
+       {:invalid_yaml, nil, %{reason: :decode_error, message: format_error_reason(kind, reason)}}}
   end
 
   defp validate_required_fields(parsed) do
@@ -129,7 +144,13 @@ defmodule Babysitter.Workflow.Parser do
     if Map.has_key?(parsed, field) do
       :ok
     else
-      {:error, {:missing_required_field, field}}
+      {:error,
+       {:invalid_yaml, nil,
+        %{
+          reason: :missing_required_field,
+          field: field,
+          message: "Missing required field: #{field}"
+        }}}
     end
   end
 
@@ -198,8 +219,13 @@ defmodule Babysitter.Workflow.Parser do
 
   defp get_stage_id(stage_data) do
     case stage_data[:id] do
-      nil -> {:error, {:missing_stage_id, stage_data}}
-      id -> {:ok, to_string(id)}
+      nil ->
+        {:error,
+         {:invalid_yaml, nil,
+          %{reason: :missing_stage_id, message: "Stage is missing required 'id' field"}}}
+
+      id ->
+        {:ok, to_string(id)}
     end
   end
 
@@ -208,11 +234,27 @@ defmodule Babysitter.Workflow.Parser do
 
   defp parse_stage_type(type) when is_binary(type) do
     case String.downcase(type) do
-      "agent" -> {:ok, :agent}
-      "action" -> {:ok, :action}
-      "validation" -> {:ok, :validation}
-      "decision" -> {:ok, :decision}
-      other -> {:error, {:invalid_stage_type, other}}
+      "agent" ->
+        {:ok, :agent}
+
+      "action" ->
+        {:ok, :action}
+
+      "validation" ->
+        {:ok, :validation}
+
+      "decision" ->
+        {:ok, :decision}
+
+      other ->
+        {:error,
+         {:invalid_yaml, nil,
+          %{
+            reason: :invalid_stage_type,
+            type: other,
+            message:
+              "Invalid stage type: #{other}. Must be one of: agent, action, validation, decision"
+          }}}
     end
   end
 
@@ -415,4 +457,63 @@ defmodule Babysitter.Workflow.Parser do
     do: list != [] and List.ascii_printable?(list)
 
   defp printable_charlist?(_), do: false
+
+  defp format_yamerl_exception(path, errors) when is_list(errors) do
+    error = List.first(errors)
+    details = extract_yamerl_error_details(error)
+    {:invalid_yaml, path, details}
+  end
+
+  defp format_yamerl_exception(path, error) do
+    {:invalid_yaml, path, %{reason: :unknown, message: "Unknown YAML error: #{inspect(error)}"}}
+  end
+
+  defp extract_yamerl_error_details(
+         {:yamerl_parsing_error, level, message, line, col, type, _token, _}
+       ) do
+    %{
+      level: level,
+      line: line,
+      column: col,
+      type: type,
+      reason: type,
+      message: to_string(message)
+    }
+  end
+
+  defp extract_yamerl_error_details({:yamerl_invalid_option, details}) do
+    %{
+      reason: :invalid_option,
+      message: "Invalid YAML option: #{inspect(details)}"
+    }
+  end
+
+  defp extract_yamerl_error_details(error) do
+    %{
+      reason: :unknown,
+      message: "YAML parsing error: #{inspect(error)}"
+    }
+  end
+
+  defp format_yamerl_error(path, {:error, line, message}) do
+    {:invalid_yaml, path,
+     %{
+       reason: :parse_error,
+       line: line,
+       message: to_string(message)
+     }}
+  end
+
+  defp format_yamerl_error(path, error) do
+    {:invalid_yaml, path,
+     %{
+       reason: :parse_error,
+       message: "YAML parse error: #{inspect(error)}"
+     }}
+  end
+
+  defp format_error_reason(:error, %_{message: message}), do: message
+  defp format_error_reason(:error, message) when is_binary(message), do: message
+  defp format_error_reason(:error, reason), do: inspect(reason)
+  defp format_error_reason(kind, reason), do: "#{kind}: #{inspect(reason)}"
 end

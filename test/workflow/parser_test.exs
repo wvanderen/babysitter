@@ -76,7 +76,8 @@ defmodule Babysitter.Workflow.ParserTest do
         - id: s1
       """
 
-      assert {:error, {:missing_required_field, :id}} = Parser.parse_string(yaml)
+      assert {:error, {:invalid_yaml, nil, %{reason: :missing_required_field, field: :id}}} =
+               Parser.parse_string(yaml)
     end
 
     test "returns error for missing name" do
@@ -86,7 +87,8 @@ defmodule Babysitter.Workflow.ParserTest do
         - id: s1
       """
 
-      assert {:error, {:missing_required_field, :name}} = Parser.parse_string(yaml)
+      assert {:error, {:invalid_yaml, nil, %{reason: :missing_required_field, field: :name}}} =
+               Parser.parse_string(yaml)
     end
 
     test "returns error for missing stages" do
@@ -95,7 +97,8 @@ defmodule Babysitter.Workflow.ParserTest do
       name: Test
       """
 
-      assert {:error, {:missing_required_field, :stages}} = Parser.parse_string(yaml)
+      assert {:error, {:invalid_yaml, nil, %{reason: :missing_required_field, field: :stages}}} =
+               Parser.parse_string(yaml)
     end
 
     test "returns error for missing stage id" do
@@ -107,7 +110,8 @@ defmodule Babysitter.Workflow.ParserTest do
           command: x
       """
 
-      assert {:error, {:missing_stage_id, _}} = Parser.parse_string(yaml)
+      assert {:error, {:invalid_yaml, nil, %{reason: :missing_stage_id}}} =
+               Parser.parse_string(yaml)
     end
 
     test "returns error for invalid stage type" do
@@ -119,7 +123,8 @@ defmodule Babysitter.Workflow.ParserTest do
           type: invalid_type
       """
 
-      assert {:error, {:invalid_stage_type, "invalid_type"}} = Parser.parse_string(yaml)
+      assert {:error, {:invalid_yaml, nil, %{reason: :invalid_stage_type, type: "invalid_type"}}} =
+               Parser.parse_string(yaml)
     end
   end
 
@@ -684,6 +689,136 @@ defmodule Babysitter.Workflow.ParserTest do
       review = workflow.stages[:review]
       assert review.type == :action
       assert review.on_success == :complete
+    end
+  end
+
+  describe "error handling" do
+    test "returns detailed error for YAML syntax error with line number" do
+      yaml = """
+      id: test
+      name: [unclosed bracket
+      stages:
+        - id: s1
+      """
+
+      assert {:error, {:invalid_yaml, nil, error_details}} = Parser.parse_string(yaml)
+      assert error_details.reason != nil
+      assert error_details.line != nil
+      assert error_details.message != nil
+    end
+
+    test "returns detailed error for unclosed flow collection" do
+      yaml = """
+      id: test
+      name: Test
+      stages: [unclosed
+      """
+
+      assert {:error, {:invalid_yaml, nil, error_details}} = Parser.parse_string(yaml)
+      assert error_details.reason != nil
+      assert error_details.line != nil
+    end
+
+    test "returns error for invalid YAML indentation" do
+      yaml = """
+      id: test
+        name: Bad indent
+      stages:
+        - id: s1
+      """
+
+      assert {:error, {:invalid_yaml, nil, error_details}} = Parser.parse_string(yaml)
+      assert error_details.reason != nil
+    end
+
+    test "error details include helpful message for missing required field" do
+      yaml = """
+      name: Test
+      stages:
+        - id: s1
+      """
+
+      assert {:error, {:invalid_yaml, nil, error_details}} = Parser.parse_string(yaml)
+      assert error_details.reason == :missing_required_field
+      assert error_details.field == :id
+      assert error_details.message =~ "id"
+    end
+
+    test "error details include helpful message for invalid stage type" do
+      yaml = """
+      id: test
+      name: Test
+      stages:
+        - id: s1
+          type: unknown_type
+      """
+
+      assert {:error, {:invalid_yaml, nil, error_details}} = Parser.parse_string(yaml)
+      assert error_details.reason == :invalid_stage_type
+      assert error_details.type == "unknown_type"
+      assert error_details.message =~ "unknown_type"
+      assert error_details.message =~ "agent"
+    end
+
+    test "error details include path when parsing file" do
+      path = "test/fixtures/nonexistent_workflow.yaml"
+
+      assert {:error, {:invalid_yaml, ^path, error_details}} = Parser.parse_file(path)
+      assert error_details.reason == :file_not_found
+      assert error_details.message =~ path
+    end
+
+    test "returns error for empty YAML content" do
+      assert {:error, {:invalid_yaml, nil, error_details}} = Parser.parse_string("")
+      assert error_details.reason == :empty_content
+    end
+
+    test "returns error for YAML with only whitespace" do
+      assert {:error, {:invalid_yaml, nil, error_details}} = Parser.parse_string("   \n\n  ")
+      assert error_details.reason == :empty_content
+    end
+
+    test "error details for missing stage id include context" do
+      yaml = """
+      id: test
+      name: Test
+      stages:
+        - type: action
+          command: echo
+      """
+
+      assert {:error, {:invalid_yaml, nil, error_details}} = Parser.parse_string(yaml)
+      assert error_details.reason == :missing_stage_id
+      assert error_details.message =~ "id"
+    end
+
+    test "handles multiple stages with one missing id" do
+      yaml = """
+      id: test
+      name: Test
+      stages:
+        - id: first
+          type: action
+        - type: action
+        - id: third
+          type: action
+      """
+
+      assert {:error, {:invalid_yaml, nil, error_details}} = Parser.parse_string(yaml)
+      assert error_details.reason == :missing_stage_id
+    end
+
+    test "error includes column information when available" do
+      yaml = """
+      id: test
+      name: "unclosed
+      stages:
+        - id: s1
+      """
+
+      assert {:error, {:invalid_yaml, nil, error_details}} = Parser.parse_string(yaml)
+      assert error_details.line != nil
+      assert error_details.column != nil
     end
   end
 end

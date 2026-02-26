@@ -18,7 +18,7 @@ Status: ready-for-dev
 | Task 1: Create workflow YAML parser module | `td-4c61ec` | **in_review** |
 | Task 2: Implement workflow struct and types | `td-6b2c61` | **complete** |
 | Task 3: Add workflow loading from directory | `td-d0a3be` | **in_review** |
-| Task 4: Implement error handling for invalid YAML | `td-92364e` | open |
+| Task 4: Implement error handling for invalid YAML | `td-92364e` | **in_review** |
 
 ---
 
@@ -78,12 +78,12 @@ So that workflows can be loaded and executed.
   - [x] 3.5: Return `{:ok, workflows}` or `{:error, failed_files}`
   - [x] 3.6: Support default path: `.babysitter/workflows/`
 
-- [ ] Task 4: Implement error handling for invalid YAML (AC: #2) [td:td-92364e]
-  - [ ] 4.1: Catch YAML syntax errors from `:yamerl`
-  - [ ] 4.2: Format error with file path, line number, and message
-  - [ ] 4.3: Handle missing required fields with specific error messages
-  - [ ] 4.4: Add error type: `{:error, {:invalid_yaml, path, details}}`
-  - [ ] 4.5: Create comprehensive error test cases
+- [x] Task 4: Implement error handling for invalid YAML (AC: #2) [td:td-92364e]
+  - [x] 4.1: Catch YAML syntax errors from `:yamerl`
+  - [x] 4.2: Format error with file path, line number, and message
+  - [x] 4.3: Handle missing required fields with specific error messages
+  - [x] 4.4: Add error type: `{:error, {:invalid_yaml, path, details}}`
+  - [x] 4.5: Create comprehensive error test cases
 
 ## Dev Notes
 
@@ -351,6 +351,18 @@ kimi-k2.5 (opencode)
    - Returns `{:ok, workflows}` for success or `{:error, [{file, reason}]}` for failures
    - 13 passing tests covering all functionality
 
+4. **Task 4 Complete**: Comprehensive error handling for invalid YAML implemented
+   - Catches YAML syntax errors from `:yamerl` using `catch :throw`
+   - Extracts line number, column, and error type from yamerl exceptions
+   - Standardized error format: `{:error, {:invalid_yaml, path, details}}`
+   - Details map includes: `reason`, `message`, `line`, `column`, `type`, `field` (where applicable)
+   - Missing required field errors include field name and helpful message
+   - Invalid stage type errors list valid options
+   - Missing stage ID errors provide context
+   - File not found errors include path in message
+   - Added 13 new comprehensive error handling tests
+   - All 65 workflow tests passing (52 parser + 13 loader)
+
 ### File List
 
 | File | Action | Description |
@@ -381,3 +393,4 @@ kimi-k2.5 (opencode)
 | 2026-02-26T15:00:00Z | task-complete | td-4c61ec: Task 1: Create workflow YAML parser module - All tests passing (41/41) |
 | 2026-02-26T13:52:00Z | task-complete | td-6b2c61: Task 2: Implement workflow struct and types - All tests passing (10/10) |
 | 2026-02-26T14:05:00Z | task-complete | td-d0a3be: Task 3: Add workflow loading from directory - All tests passing (13/13) |
+| 2026-02-26T14:35:00Z | task-complete | td-92364e: Task 4: Implement error handling for invalid YAML - All tests passing (65/65 workflow tests) |
