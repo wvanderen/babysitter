@@ -314,6 +314,40 @@ defmodule Babysitter.Workflow.ValidatorTest do
       assert Enum.any?(workflow.warnings, &(&1.type == :circular_reference))
     end
 
+    test "warns about cycle through on_failure path" do
+      yaml = """
+      id: test
+      name: Test
+      stages:
+        - id: a
+          on_success: b
+        - id: b
+          on_failure: a
+      """
+
+      {:ok, workflow} = Parser.parse_string(yaml)
+
+      assert {:ok, workflow} = Validator.validate(workflow)
+      assert Enum.any?(workflow.warnings, &(&1.type == :circular_reference))
+    end
+
+    test "warns about cycle through on_timeout path" do
+      yaml = """
+      id: test
+      name: Test
+      stages:
+        - id: a
+          on_success: b
+        - id: b
+          on_timeout: a
+      """
+
+      {:ok, workflow} = Parser.parse_string(yaml)
+
+      assert {:ok, workflow} = Validator.validate(workflow)
+      assert Enum.any?(workflow.warnings, &(&1.type == :circular_reference))
+    end
+
     test "allows self-referencing stage (retry pattern) with warning" do
       yaml = """
       id: test

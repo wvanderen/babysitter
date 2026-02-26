@@ -159,18 +159,17 @@ defmodule Babysitter.Workflow.Validator do
 
       true ->
         stage = Map.get(stages, current)
-        next = Map.get(stage, :on_success)
+        transitions = [:on_success, :on_failure, :on_timeout]
 
-        if next do
-          do_find_cycle(
-            stages,
-            next,
-            MapSet.put(visited, current),
-            path ++ [current]
-          )
-        else
-          nil
-        end
+        new_visited = MapSet.put(visited, current)
+        new_path = path ++ [current]
+
+        Enum.find_value(transitions, fn field ->
+          case Map.get(stage, field) do
+            nil -> nil
+            next -> do_find_cycle(stages, next, new_visited, new_path)
+          end
+        end)
     end
   end
 
