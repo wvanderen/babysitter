@@ -213,6 +213,8 @@ None required - straightforward implementation
 | `test/babysitter/setup_worker_test.exs` | NEW | Unit tests for SetupWorker |
 | `lib/babysitter/tmux/verifier.ex` | NEW | tmux verification module |
 | `test/babysitter/tmux/verifier_test.exs` | NEW | Unit tests for tmux verification |
+| `lib/babysitter/retry_handler.ex` | MODIFIED | Formatting changes during tmux implementation |
+| `test/retry_handler_test.exs` | MODIFIED | Formatting changes during tmux implementation |
 | `lib/babysitter/application.ex` | MODIFIED | Added SetupWorker to supervision tree |
 
 ---
