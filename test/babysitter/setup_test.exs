@@ -14,7 +14,7 @@ defmodule Babysitter.SetupTest do
     end
   end
 
-  describe "ensure_directories/0" do
+  describe "ensure_directories/1" do
     test "creates all required directories if missing" do
       test_id = :rand.uniform(1_000_000)
       test_base = "test_tmp_#{test_id}"

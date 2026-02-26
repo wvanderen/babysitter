@@ -38,6 +38,41 @@ defmodule Babysitter.Tmux.VerifierTest do
     end
   end
 
+  describe "parse_version/1" do
+    test "extracts version from standard tmux output" do
+      assert "3.4" = Verifier.parse_version("tmux 3.4")
+    end
+
+    test "handles leading/trailing whitespace" do
+      assert "3.4" = Verifier.parse_version("  tmux 3.4  ")
+      assert "3.4" = Verifier.parse_version("\ttmux 3.4\n")
+    end
+
+    test "handles case-insensitive tmux prefix" do
+      assert "3.4" = Verifier.parse_version("TMUX 3.4")
+      assert "3.4" = Verifier.parse_version("Tmux 3.4")
+    end
+
+    test "handles unusual version formats" do
+      assert "next-3.4" = Verifier.parse_version("tmux next-3.4")
+      assert "3.4-rc" = Verifier.parse_version("tmux 3.4-rc")
+      assert "3.4.1" = Verifier.parse_version("tmux 3.4.1")
+    end
+
+    test "handles empty string gracefully" do
+      assert "" = Verifier.parse_version("")
+    end
+
+    test "handles output without version number" do
+      assert "random text" = Verifier.parse_version("random text")
+      assert "error message" = Verifier.parse_version("error message")
+    end
+
+    test "handles version at different positions" do
+      assert "3.4 extra" = Verifier.parse_version("tmux 3.4 extra")
+    end
+  end
+
   describe "installation_instructions/0" do
     test "returns installation instructions" do
       instructions = Verifier.installation_instructions()

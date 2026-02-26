@@ -98,7 +98,24 @@ defmodule Babysitter.Tmux.Verifier do
     |> String.trim()
   end
 
-  defp parse_version(output) do
+  @doc """
+  Parses tmux version from command output.
+
+  Handles various edge cases in version string parsing.
+
+  ## Examples
+
+      iex> Babysitter.Tmux.Verifier.parse_version("tmux 3.4")
+      "3.4"
+
+      iex> Babysitter.Tmux.Verifier.parse_version("  tmux 3.4  ")
+      "3.4"
+
+      iex> Babysitter.Tmux.Verifier.parse_version("tmux next-3.4")
+      "next-3.4"
+  """
+  @spec parse_version(String.t()) :: String.t()
+  def parse_version(output) do
     output
     |> String.trim()
     |> String.replace(~r/^tmux\s+/i, "")
