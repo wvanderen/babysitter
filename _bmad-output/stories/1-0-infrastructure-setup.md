@@ -55,12 +55,12 @@ So that agent sessions can run and be attachable for debugging.
   - [ ] 1.3: Return `{:ok, version}` or `{:error, :tmux_not_found}`
   - [ ] 1.4: Add helpful error message with installation instructions
 
-- [ ] Task 2: Create directory structure on startup (AC: #2) [td:td-052a7a]
-  - [ ] 2.1: Create `lib/babysitter/setup.ex` module
-  - [ ] 2.2: Implement `ensure_directories/0` function
-  - [ ] 2.3: Create `data/babysitter/` if missing
-  - [ ] 2.4: Create `data/langgraph/` if missing
-  - [ ] 2.5: Create `.babysitter/workflows/` if missing
+- [x] Task 2: Create directory structure on startup (AC: #2) [td:td-052a7a]
+  - [x] 2.1: Create `lib/babysitter/setup.ex` module
+  - [x] 2.2: Implement `ensure_directories/0` function
+  - [x] 2.3: Create `data/babysitter/` if missing
+  - [x] 2.4: Create `data/langgraph/` if missing
+  - [x] 2.5: Create `.babysitter/workflows/` if missing
 
 - [ ] Task 3: Integrate setup into application startup (AC: #1, #2, #3) [td:td-97d825]
   - [ ] 3.1: Add setup check to `application.ex` supervision tree
@@ -173,19 +173,26 @@ end
 
 ### Agent Model Used
 
-(To be filled during implementation)
+Claude (GLM-5) - ses_18b3dc
 
 ### Debug Log References
 
-(To be filled during implementation)
+None required - straightforward implementation
 
 ### Completion Notes List
 
-(To be filled during implementation)
+**Task 2 (td-052a7a): Create directory structure on startup**
+- Created `Babysitter.Setup` module with `required_dirs/0`, `ensure_directories/1`, and `ensure_directories!/0` functions
+- Implemented using `File.mkdir_p/1` for idempotent directory creation
+- Added comprehensive unit tests with proper cleanup via `on_exit` callbacks
+- All 4 tests pass
 
 ### File List
 
-(To be filled during implementation)
+| File | Action | Description |
+|------|--------|-------------|
+| `lib/babysitter/setup.ex` | NEW | Directory setup module |
+| `test/babysitter/setup_test.exs` | NEW | Unit tests for setup module |
 
 ---
 
@@ -194,3 +201,4 @@ end
 | Timestamp | Action | Details |
 |-----------|--------|---------|
 | 2026-02-26T00:00:00Z | initialized | Story created with td epic td-08b291 and 4 tasks |
+| 2026-02-26T11:06Z | task-complete | td-052a7a: Create directory structure on startup |
