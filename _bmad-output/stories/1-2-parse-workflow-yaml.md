@@ -17,7 +17,7 @@ Status: ready-for-dev
 |------|----------|--------|
 | Task 1: Create workflow YAML parser module | `td-4c61ec` | **in_review** |
 | Task 2: Implement workflow struct and types | `td-6b2c61` | **complete** |
-| Task 3: Add workflow loading from directory | `td-d0a3be` | open |
+| Task 3: Add workflow loading from directory | `td-d0a3be` | **in_review** |
 | Task 4: Implement error handling for invalid YAML | `td-92364e` | open |
 
 ---
@@ -70,13 +70,13 @@ So that workflows can be loaded and executed.
   - [x] 2.5: Add `@enforce_keys` for required fields
   - [x] 2.6: Implement `__struct__/0` with defaults for optional fields
 
-- [ ] Task 3: Add workflow loading from directory (AC: #4) [td:td-d0a3be]
-  - [ ] 3.1: Create `lib/babysitter/workflow/loader.ex` module
-  - [ ] 3.2: Implement `load_all/1` that takes directory path
-  - [ ] 3.3: Find all `.yml` and `.yaml` files in directory
-  - [ ] 3.4: Parse each file and collect successful results
-  - [ ] 3.5: Return `{:ok, workflows}` or `{:error, failed_files}`
-  - [ ] 3.6: Support default path: `.babysitter/workflows/`
+- [x] Task 3: Add workflow loading from directory (AC: #4) [td:td-d0a3be]
+  - [x] 3.1: Create `lib/babysitter/workflow/loader.ex` module
+  - [x] 3.2: Implement `load_all/1` that takes directory path
+  - [x] 3.3: Find all `.yml` and `.yaml` files in directory
+  - [x] 3.4: Parse each file and collect successful results
+  - [x] 3.5: Return `{:ok, workflows}` or `{:error, failed_files}`
+  - [x] 3.6: Support default path: `.babysitter/workflows/`
 
 - [ ] Task 4: Implement error handling for invalid YAML (AC: #2) [td:td-92364e]
   - [ ] 4.1: Catch YAML syntax errors from `:yamerl`
@@ -341,6 +341,16 @@ kimi-k2.5 (opencode)
    - Created helper function `new/4` for easier workflow creation
    - All 10 tests passing
 
+3. **Task 3 Complete**: Workflow loader module implemented
+   - Created `lib/babysitter/workflow/loader.ex` module
+   - Implemented `load_all/0` with default path `.babysitter/workflows/`
+   - Implemented `load_all/1` for custom directory paths
+   - Implemented `load_file/1` for single file loading
+   - Implemented `workflows_by_id/1` to index workflows by ID
+   - Catches YAML parse throws and converts to error tuples
+   - Returns `{:ok, workflows}` for success or `{:error, [{file, reason}]}` for failures
+   - 13 passing tests covering all functionality
+
 ### File List
 
 | File | Action | Description |
@@ -370,3 +380,4 @@ kimi-k2.5 (opencode)
 | 2026-02-26T14:45:00Z | initialized | Story created with td epic td-a18b1a and 4 tasks |
 | 2026-02-26T15:00:00Z | task-complete | td-4c61ec: Task 1: Create workflow YAML parser module - All tests passing (41/41) |
 | 2026-02-26T13:52:00Z | task-complete | td-6b2c61: Task 2: Implement workflow struct and types - All tests passing (10/10) |
+| 2026-02-26T14:05:00Z | task-complete | td-d0a3be: Task 3: Add workflow loading from directory - All tests passing (13/13) |
