@@ -24,8 +24,15 @@ defmodule Babysitter.SessionManager do
 
   def get_session(session_id) do
     case Babysitter.Session.whereis(session_id) do
-      nil -> {:error, :not_found}
-      _pid -> Babysitter.Session.get_state(session_id)
+      nil ->
+        {:error, :not_found}
+
+      _pid ->
+        try do
+          Babysitter.Session.get_state(session_id)
+        catch
+          :exit, _ -> {:error, :not_found}
+        end
     end
   end
 
