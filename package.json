@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@wvanderen/bmad-module-td": "^0.1.12"
+  }
+}

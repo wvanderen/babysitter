@@ -11,3 +11,6 @@ erl_crash.dump
 
 # btca local data
 .btca/
+.opencode
+_bmad
+node_modules
