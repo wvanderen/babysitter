@@ -120,6 +120,19 @@ defmodule Babysitter.TD.WriterTest do
       {:ok, show_output} = CLI.execute_td(["show", issue_id, "--short"])
       assert show_output =~ "in_review"
     end
+
+    test "returns warning and auto-creates handoff when submitting for review without handoff", %{
+      issue_id: issue_id
+    } do
+      CLI.start_issue(issue_id)
+
+      result = Writer.submit_for_review(issue_id, reason: "Implementation complete")
+      assert {:ok, output} = result
+      assert output =~ "auto-created minimal handoff"
+
+      {:ok, show_output} = CLI.execute_td(["show", issue_id, "--short"])
+      assert show_output =~ "in_review"
+    end
   end
 
   describe "write_context/3" do
