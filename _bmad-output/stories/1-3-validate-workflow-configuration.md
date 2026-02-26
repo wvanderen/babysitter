@@ -1,14 +1,14 @@
 # Story 1.3: Validate Workflow Configuration
 
-Status: ready-for-dev
+Status: dev-complete
 
 <!-- BMAD-TD Integration: This story is synced with td task td-e5bc3e -->
 
 ## td Integration
 
 - **td Issue**: `td-e5bc3e`
-- **Last Sync**: 2026-02-26T15:45:00Z
-- **Sync Status**: initialized
+- **Last Sync**: 2026-02-26T15:24:00Z
+- **Sync Status**: dev-complete
 
 ---
 
@@ -47,35 +47,35 @@ So that errors are caught early with helpful messages.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create workflow validator module (AC: #1, #2, #3)
-  - [ ] 1.1: Create `lib/babysitter/workflow/validator.ex` module
-  - [ ] 1.2: Implement `validate/1` function that takes parsed workflow
-  - [ ] 1.3: Return `{:ok, workflow}` or `{:error, [validation_errors]}`
-  - [ ] 1.4: Define `%ValidationError{}` struct for error details
+- [x] Task 1: Create workflow validator module (AC: #1, #2, #3)
+  - [x] 1.1: Create `lib/babysitter/workflow/validator.ex` module
+  - [x] 1.2: Implement `validate/1` function that takes parsed workflow
+  - [x] 1.3: Return `{:ok, workflow}` or `{:error, [validation_errors]}`
+  - [x] 1.4: Define `%ValidationError{}` struct for error details
 
-- [ ] Task 2: Implement stage reference validation (AC: #1)
-  - [ ] 2.1: Collect all stage IDs from workflow
-  - [ ] 2.2: Verify each `on_success` reference exists
-  - [ ] 2.3: Verify each `on_failure` reference exists
-  - [ ] 2.4: Verify `entry_point` references existing stage
-  - [ ] 2.5: Report missing references with stage context
+- [x] Task 2: Implement stage reference validation (AC: #1)
+  - [x] 2.1: Collect all stage IDs from workflow
+  - [x] 2.2: Verify each `on_success` reference exists
+  - [x] 2.3: Verify each `on_failure` reference exists
+  - [x] 2.4: Verify `entry_point` references existing stage
+  - [x] 2.5: Report missing references with stage context
 
-- [ ] Task 3: Implement required field validation (AC: #2)
-  - [ ] 3.1: Check workflow-level required fields
-  - [ ] 3.2: Check stage-level required fields based on type
-  - [ ] 3.3: Generate descriptive error messages with field names
-  - [ ] 3.4: Collect all missing fields before returning errors
+- [x] Task 3: Implement required field validation (AC: #2)
+  - [x] 3.1: Check workflow-level required fields
+  - [x] 3.2: Check stage-level required fields based on type
+  - [x] 3.3: Generate descriptive error messages with field names
+  - [x] 3.4: Collect all missing fields before returning errors
 
-- [ ] Task 4: Implement intelligence level validation (AC: #3)
-  - [ ] 4.1: Validate intelligence is valid atom
-  - [ ] 4.2: Default to `hybrid` if not specified
-  - [ ] 4.3: Report invalid values with valid options
+- [x] Task 4: Implement intelligence level validation (AC: #3)
+  - [x] 4.1: Validate intelligence is valid atom
+  - [x] 4.2: Default to `hybrid` if not specified
+  - [x] 4.3: Report invalid values with valid options
 
-- [ ] Task 5: Implement circular reference detection (AC: #4)
-  - [ ] 5.1: Build transition graph from stages
-  - [ ] 5.2: Detect cycles using graph traversal
-  - [ ] 5.3: Identify unreachable stages (not reachable from entry)
-  - [ ] 5.4: Return warnings (not errors) for these cases
+- [x] Task 5: Implement circular reference detection (AC: #4)
+  - [x] 5.1: Build transition graph from stages
+  - [x] 5.2: Detect cycles using graph traversal
+  - [x] 5.3: Identify unreachable stages (not reachable from entry)
+  - [x] 5.4: Return warnings (not errors) for these cases
 
 ## Dev Notes
 
@@ -86,17 +86,24 @@ From architecture.md:
 - Errors should be caught early with helpful messages
 - Validation is part of FR-1 (Workflow definition and execution)
 
-### Key Files to Create/Modify
+### Key Files Created
 
 ```
-lib/
-├── babysitter/
-│   └── workflow/
-│       └── validator.ex       # NEW: Validation logic
-test/
-└── workflow/
-    └── validator_test.exs     # NEW
+lib/babysitter/workflow/
+├── validation_error.ex   # NEW: ValidationError struct
+└── validator.ex          # NEW: Workflow validation logic
+
+test/workflow/
+└── validator_test.exs    # NEW: 27 unit tests
 ```
+
+## File List
+
+| File | Status | Description |
+|------|--------|-------------|
+| `lib/babysitter/workflow/validation_error.ex` | NEW | ValidationError struct with factory functions |
+| `lib/babysitter/workflow/validator.ex` | NEW | Workflow validator with all AC validations |
+| `test/workflow/validator_test.exs` | NEW | 27 unit tests covering all acceptance criteria |
 
 ### Validation Error Structure
 
@@ -175,3 +182,21 @@ end
 | Timestamp | Action | Details |
 |-----------|--------|---------|
 | 2026-02-26T15:45:00Z | initialized | Story created, unblocked after Story 1.2 completion |
+| 2026-02-26T15:24:00Z | dev-complete | All 5 tasks implemented with 27 passing tests |
+
+## Completion Notes
+
+**Implementation Summary:**
+- Created `ValidationError` struct with typed error types and factory functions
+- Implemented `Validator.validate/1` with comprehensive validation pipeline
+- Validates stage references (on_success, on_failure, on_timeout, entry_point)
+- Validates required workflow fields (id, name, stages)
+- Validates intelligence level (dumb/smart/hybrid)
+- Detects circular references as warnings (not errors)
+- Identifies unreachable stages as warnings
+- All 27 unit tests pass
+
+**Key Decisions:**
+- Circular references and unreachable stages are warnings, not errors - allows retry patterns
+- ValidationError struct provides factory functions for consistent error creation
+- Validation errors are collected before returning (fail-fast would hide multiple issues)
