@@ -136,6 +136,17 @@ defmodule Babysitter.GitTest do
       result = Git.recent_commits(minutes: 60, max_commits: 10)
       assert is_tuple(result)
     end
+
+    test "returns commits with ISO8601 parsed time field" do
+      {:ok, commits} = Git.recent_commits(minutes: 60)
+
+      for commit <- commits do
+        assert Map.has_key?(commit, :hash)
+        assert Map.has_key?(commit, :message)
+        assert Map.has_key?(commit, :time)
+        assert %DateTime{} = commit.time
+      end
+    end
   end
 
   describe "normalize_commits/1" do
