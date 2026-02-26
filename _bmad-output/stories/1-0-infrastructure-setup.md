@@ -1,24 +1,24 @@
 # Story 1.0: Infrastructure Setup
 
-Status: ready-for-dev
+Status: all-tasks-complete
 
 <!-- BMAD-TD Integration: This story is synced with td epic td-08b291 -->
 
 ## td Integration
 
 - **td Epic**: `td-08b291`
-- **td Tasks**: 4 issues (4 open, 0 in-progress, 0 blocked)
-- **Last Sync**: 2026-02-26T00:00:00Z
-- **Sync Status**: initialized
+- **td Tasks**: 4 issues (0 open, 0 in-progress, 0 blocked, 4 in_review)
+- **Last Sync**: 2026-02-26T12:30:00Z
+- **Sync Status**: all-tasks-complete
 
 ### Task → td Mapping
 
 | Task | td Issue | Status |
 |------|----------|--------|
-| Task 1: Create tmux verification module | `td-0ad925` | open |
-| Task 2: Create directory structure on startup | `td-052a7a` | open |
-| Task 3: Integrate setup into application startup | `td-97d825` | open |
-| Task 4: Add unit tests for infrastructure setup | `td-2e1730` | open |
+| Task 1: Create tmux verification module | `td-0ad925` | in_review |
+| Task 2: Create directory structure on startup | `td-052a7a` | in_review |
+| Task 3: Integrate setup into application startup | `td-97d825` | in_review |
+| Task 4: Add unit tests for infrastructure setup | `td-2e1730` | in_review |
 
 ---
 
@@ -67,10 +67,10 @@ So that agent sessions can run and be attachable for debugging.
   - [x] 3.2: Fail fast if tmux not available
   - [x] 3.3: Log successful setup on startup
 
-- [ ] Task 4: Add unit tests (AC: #1, #2, #3) [td:td-2e1730]
-  - [ ] 4.1: Test tmux verification success path
-  - [ ] 4.2: Test tmux verification failure path (mock)
-  - [ ] 4.3: Test directory creation
+- [x] Task 4: Add unit tests (AC: #1, #2, #3) [td:td-2e1730]
+  - [x] 4.1: Test tmux verification success path
+  - [x] 4.2: Test tmux verification failure path (mock)
+  - [x] 4.3: Test directory creation
 
 ## Dev Notes
 
@@ -196,6 +196,13 @@ None required - straightforward implementation
 - Application fails to start if tmux is not available (fail-fast)
 - Added unit tests for SetupWorker
 
+**Task 4 (td-2e1730): Add unit tests for infrastructure setup**
+- Tests implemented as part of Tasks 1-3 (co-located with implementation)
+- tmux verification tests: success path, failure path (mock), installation instructions
+- Setup module tests: required_dirs/0, ensure_directories/0 and /0!
+- SetupWorker tests: start_link/1 and init/1 validation
+- All 11 infrastructure tests pass with no regressions
+
 ### File List
 
 | File | Action | Description |
@@ -204,6 +211,8 @@ None required - straightforward implementation
 | `test/babysitter/setup_test.exs` | NEW | Unit tests for setup module |
 | `lib/babysitter/setup_worker.ex` | NEW | Startup verification GenServer |
 | `test/babysitter/setup_worker_test.exs` | NEW | Unit tests for SetupWorker |
+| `lib/babysitter/tmux/verifier.ex` | NEW | tmux verification module |
+| `test/babysitter/tmux/verifier_test.exs` | NEW | Unit tests for tmux verification |
 | `lib/babysitter/application.ex` | MODIFIED | Added SetupWorker to supervision tree |
 
 ---
@@ -215,3 +224,4 @@ None required - straightforward implementation
 | 2026-02-26T00:00:00Z | initialized | Story created with td epic td-08b291 and 4 tasks |
 | 2026-02-26T11:06Z | task-complete | td-052a7a: Create directory structure on startup |
 | 2026-02-26T11:14Z | task-complete | td-97d825: Integrate setup into application startup |
+| 2026-02-26T12:30Z | task-complete | td-2e1730: Add unit tests for infrastructure setup |
