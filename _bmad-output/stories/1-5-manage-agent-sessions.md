@@ -2,6 +2,37 @@
 
 Status: complete
 
+## Senior Developer Review (AI)
+
+**Date:** 2026-02-26T23:20:00Z
+**Outcome:** Approved with fixes
+**Action Items:** 3 (resolved)
+
+### Summary
+
+Epic-level code review identified 3 issues that were fixed:
+1. Race condition in SessionManager.get_session/1 - now handles process termination gracefully
+2. Dead code path in OutputCapture.setup_pipe_pane/2 - fixed control flow
+3. Missing test for ISO8601 date parsing in Git.recent_commits/1 - test added
+
+All 88 session-related tests pass.
+
+### Issues Resolved
+
+- [x] [HIGH] Race condition in SessionManager.get_session/1 - added try/catch for exit signals
+- [x] [MEDIUM] Dead code path in OutputCapture.setup_pipe_pane/2 - fixed unless/if logic
+- [x] [MEDIUM] Missing test for git.recent_commits ISO8601 parsing - test added
+
+### File List (Updated)
+
+| File | Action | Description |
+|------|--------|-------------|
+| `lib/babysitter/git.ex` | MODIFIED | Fixed date format for recent_commits |
+| `lib/babysitter/session_manager.ex` | MODIFIED | Added try/catch for race condition |
+| `lib/babysitter/output_capture.ex` | MODIFIED | Fixed setup_pipe_pane control flow |
+| `test/controllers/workflow_controller_test.exs` | MODIFIED | Added required workflow fields |
+| `test/git_test.exs` | MODIFIED | Added ISO8601 date parsing test |
+
 <!-- BMAD-TD Integration: This story is synced with td task td-35998b -->
 
 ## td Integration
@@ -132,3 +163,4 @@ Claude (GLM-5) - ses_56baeb
 |-----------|--------|---------|
 | 2026-02-26T16:20:00Z | task-started | td-35998b: Story 1.5: Manage Agent Sessions |
 | 2026-02-26T16:30:00Z | task-complete | td-35998b: Verified implementation, fixed tests |
+| 2026-02-26T23:20:00Z | review-complete | ses_8595a6: Epic review complete, 3 issues fixed |
