@@ -56,7 +56,17 @@ defmodule BabysitterWeb.WorkflowControllerTest do
 
   describe "POST /api/workflows/:id/execute" do
     test "starts workflow execution" do
-      WorkflowStore.put(%{id: "wf-4", name: "Test Workflow 4"})
+      workflow = %{
+        id: "wf-4",
+        name: "Test Workflow 4",
+        stages: %{
+          stage1: %{type: :action, command: "echo test"}
+        },
+        stage_order: [:stage1],
+        entry_point: :stage1
+      }
+
+      WorkflowStore.put(workflow)
 
       conn = post(build_conn(), "/api/workflows/wf-4/execute")
       response = json_response(conn, 200)

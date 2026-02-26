@@ -410,7 +410,7 @@ defmodule Babysitter.Git do
       "log",
       "--since=#{since_arg}",
       "--max-count=#{max_commits}",
-      "--pretty=format:%H|%s|%ci"
+      "--pretty=format:%H|%s|%aI"
     ]
 
     case System.cmd("git", args, stderr_to_stdout: true) do
