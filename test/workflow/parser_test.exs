@@ -178,7 +178,6 @@ defmodule Babysitter.Workflow.ParserTest do
       assert stage.prompt == "Template content"
     end
 
-
     test "parses stage with per-stage agent" do
       yaml = """
       id: test
@@ -211,6 +210,7 @@ defmodule Babysitter.Workflow.ParserTest do
 
       assert stage.agent == nil
     end
+
     test "parses validation stage" do
       yaml = """
       id: test
