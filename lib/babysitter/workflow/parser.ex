@@ -7,8 +7,6 @@ defmodule Babysitter.Workflow.Parser do
 
   alias Babysitter.{Stage, Validation}
 
-  @workflows_dir ".babysitter/workflows"
-
   @type workflow :: %{
           id: String.t(),
           name: String.t(),
@@ -43,51 +41,6 @@ defmodule Babysitter.Workflow.Parser do
          {:ok, parsed} <- validate_required_fields(raw),
          {:ok, workflow} <- build_workflow(parsed) do
       {:ok, workflow}
-    end
-  end
-
-  @spec load_all() :: {:ok, [workflow()]} | {:error, term()}
-  def load_all do
-    load_all(@workflows_dir)
-  end
-
-  @spec load_all(Path.t()) :: {:ok, [workflow()]} | {:error, term()}
-  def load_all(dir) do
-    case File.ls(dir) do
-      {:ok, files} ->
-        yaml_files = Enum.filter(files, &String.ends_with?(&1, [".yaml", ".yml"]))
-
-        results =
-          yaml_files
-          |> Enum.map(&Path.join(dir, &1))
-          |> Enum.map(&parse_file/1)
-
-        errors =
-          Enum.filter(results, fn
-            {:error, _} -> true
-            _ -> false
-          end)
-
-        if Enum.empty?(errors) do
-          workflows = Enum.map(results, fn {:ok, w} -> w end)
-          {:ok, workflows}
-        else
-          {:error, {:parse_errors, errors}}
-        end
-
-      {:error, :enoent} ->
-        {:ok, []}
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
-  @spec load_all!() :: [workflow()]
-  def load_all! do
-    case load_all() do
-      {:ok, workflows} -> workflows
-      {:error, reason} -> raise "Failed to load workflows: #{inspect(reason)}"
     end
   end
 

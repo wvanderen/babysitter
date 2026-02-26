@@ -9,7 +9,7 @@ defmodule Babysitter.WorkflowLoader do
   require Logger
 
   alias Babysitter.WorkflowStore
-  alias Babysitter.Workflow.Parser
+  alias Babysitter.Workflow.Loader
 
   def start_link(opts \\ []) do
     GenServer.start_link(__MODULE__, :ok, Keyword.put(opts, :name, __MODULE__))
@@ -35,7 +35,7 @@ defmodule Babysitter.WorkflowLoader do
   end
 
   defp load_workflows do
-    case Parser.load_all() do
+    case Loader.load_all() do
       {:ok, workflows} when workflows != [] ->
         Enum.each(workflows, &WorkflowStore.put/1)
         Logger.info("Loaded #{length(workflows)} workflow(s) from .babysitter/workflows/")
