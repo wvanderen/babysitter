@@ -184,11 +184,13 @@ defmodule Babysitter.OutputCapture do
   end
 
   defp setup_pipe_pane(session_name, pipe_file) do
-    unless Tmux.session_exists?(session_name), do: {:error, :session_not_found}
-
-    case Tmux.pipe_pane(session_name, pipe_file) do
-      :ok -> :ok
-      {:error, reason} -> {:error, {:tmux_pipe_error, reason}}
+    if not Tmux.session_exists?(session_name) do
+      {:error, :session_not_found}
+    else
+      case Tmux.pipe_pane(session_name, pipe_file) do
+        :ok -> :ok
+        {:error, reason} -> {:error, {:tmux_pipe_error, reason}}
+      end
     end
   end
 
