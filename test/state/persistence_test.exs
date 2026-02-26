@@ -1,10 +1,11 @@
 defmodule Babysitter.State.PersistenceTest do
   use ExUnit.Case, async: false
 
-  alias Babysitter.State.{Persistence, SessionState, Repo}
+  alias Babysitter.State.{Persistence, SessionState, LangGraphSession, Repo}
 
   setup do
     Repo.delete_all(SessionState)
+    Repo.delete_all(LangGraphSession)
     :ok
   end
 
@@ -168,6 +169,119 @@ defmodule Babysitter.State.PersistenceTest do
 
     test "returns false for non-existent session" do
       refute Persistence.exists?("nonexistent")
+    end
+  end
+
+  describe "save_langgraph_session/1" do
+    test "creates new langgraph session mapping" do
+      attrs = %{
+        session_id: "session-1",
+        thread_id: "thread-abc",
+        checkpoint_id: "checkpoint-123"
+      }
+
+      assert {:ok, mapping} = Persistence.save_langgraph_session(attrs)
+      assert mapping.session_id == "session-1"
+      assert mapping.thread_id == "thread-abc"
+      assert mapping.checkpoint_id == "checkpoint-123"
+    end
+
+    test "updates existing langgraph session mapping" do
+      Persistence.save_langgraph_session(%{
+        session_id: "session-2",
+        thread_id: "thread-old"
+      })
+
+      assert {:ok, updated} =
+               Persistence.save_langgraph_session(%{
+                 session_id: "session-2",
+                 thread_id: "thread-new",
+                 checkpoint_id: "cp-456"
+               })
+
+      assert updated.thread_id == "thread-new"
+      assert updated.checkpoint_id == "cp-456"
+    end
+  end
+
+  describe "get_langgraph_session/1" do
+    test "returns nil for non-existent session" do
+      assert Persistence.get_langgraph_session("nonexistent") == nil
+    end
+
+    test "returns mapping for existing session" do
+      Persistence.save_langgraph_session(%{
+        session_id: "session-3",
+        thread_id: "thread-xyz"
+      })
+
+      mapping = Persistence.get_langgraph_session("session-3")
+      assert mapping.session_id == "session-3"
+      assert mapping.thread_id == "thread-xyz"
+    end
+  end
+
+  describe "get_langgraph_session_by_thread/1" do
+    test "returns nil for non-existent thread" do
+      assert Persistence.get_langgraph_session_by_thread("nonexistent") == nil
+    end
+
+    test "returns mapping for existing thread" do
+      Persistence.save_langgraph_session(%{
+        session_id: "session-4",
+        thread_id: "thread-unique"
+      })
+
+      mapping = Persistence.get_langgraph_session_by_thread("thread-unique")
+      assert mapping.session_id == "session-4"
+    end
+  end
+
+  describe "update_langgraph_checkpoint/2" do
+    test "updates checkpoint for existing session" do
+      Persistence.save_langgraph_session(%{
+        session_id: "session-5",
+        thread_id: "thread-5"
+      })
+
+      assert {:ok, updated} =
+               Persistence.update_langgraph_checkpoint("session-5", "new-checkpoint")
+
+      assert updated.checkpoint_id == "new-checkpoint"
+    end
+
+    test "returns error for non-existent session" do
+      assert {:error, :not_found} =
+               Persistence.update_langgraph_checkpoint("nonexistent", "checkpoint")
+    end
+  end
+
+  describe "delete_langgraph_session/1" do
+    test "deletes existing mapping" do
+      Persistence.save_langgraph_session(%{
+        session_id: "session-6",
+        thread_id: "thread-6"
+      })
+
+      assert {:ok, _} = Persistence.delete_langgraph_session("session-6")
+      assert Persistence.get_langgraph_session("session-6") == nil
+    end
+
+    test "returns error for non-existent session" do
+      assert {:error, :not_found} = Persistence.delete_langgraph_session("nonexistent")
+    end
+  end
+
+  describe "list_langgraph_sessions/0" do
+    test "lists all langgraph session mappings" do
+      Persistence.save_langgraph_session(%{session_id: "lg-1", thread_id: "t1"})
+      Persistence.save_langgraph_session(%{session_id: "lg-2", thread_id: "t2"})
+
+      mappings = Persistence.list_langgraph_sessions()
+      ids = Enum.map(mappings, & &1.session_id)
+
+      assert "lg-1" in ids
+      assert "lg-2" in ids
     end
   end
 end

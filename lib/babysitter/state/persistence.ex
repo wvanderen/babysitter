@@ -3,7 +3,7 @@ defmodule Babysitter.State.Persistence do
   API for persisting and recovering session state across daemon restarts.
   """
 
-  alias Babysitter.State.{Repo, SessionState}
+  alias Babysitter.State.{Repo, SessionState, LangGraphSession}
 
   @doc """
   Save session state to the database.
@@ -236,5 +236,86 @@ defmodule Babysitter.State.Persistence do
       max_retries: meta["max_retries"] || 3,
       execution_history: meta["execution_history"] || []
     }
+  end
+
+  @doc """
+  Save LangGraph session mapping to the database.
+  Creates a new record or updates existing based on session_id.
+  """
+  @spec save_langgraph_session(map()) ::
+          {:ok, LangGraphSession.t()} | {:error, Ecto.Changeset.t()}
+  def save_langgraph_session(%{session_id: session_id} = attrs) do
+    case get_langgraph_session(session_id) do
+      nil ->
+        %LangGraphSession{}
+        |> Ecto.Changeset.change(attrs)
+        |> Repo.insert()
+
+      existing ->
+        existing
+        |> Ecto.Changeset.change(attrs)
+        |> Repo.update()
+    end
+  end
+
+  @doc """
+  Get LangGraph session mapping by session_id.
+  """
+  @spec get_langgraph_session(String.t()) :: LangGraphSession.t() | nil
+  def get_langgraph_session(session_id) do
+    import Ecto.Query
+
+    from(l in LangGraphSession, where: l.session_id == ^session_id)
+    |> Repo.one()
+  end
+
+  @doc """
+  Get LangGraph session mapping by thread_id.
+  """
+  @spec get_langgraph_session_by_thread(String.t()) :: LangGraphSession.t() | nil
+  def get_langgraph_session_by_thread(thread_id) do
+    import Ecto.Query
+
+    from(l in LangGraphSession, where: l.thread_id == ^thread_id)
+    |> Repo.one()
+  end
+
+  @doc """
+  Update checkpoint_id for a LangGraph session.
+  """
+  @spec update_langgraph_checkpoint(String.t(), String.t()) ::
+          {:ok, LangGraphSession.t()} | {:error, :not_found | Ecto.Changeset.t()}
+  def update_langgraph_checkpoint(session_id, checkpoint_id) do
+    case get_langgraph_session(session_id) do
+      nil ->
+        {:error, :not_found}
+
+      session ->
+        session
+        |> Ecto.Changeset.change(%{checkpoint_id: checkpoint_id})
+        |> Repo.update()
+    end
+  end
+
+  @doc """
+  Delete LangGraph session mapping.
+  """
+  @spec delete_langgraph_session(String.t()) :: {:ok, LangGraphSession.t()} | {:error, :not_found}
+  def delete_langgraph_session(session_id) do
+    case get_langgraph_session(session_id) do
+      nil -> {:error, :not_found}
+      session -> Repo.delete(session)
+    end
+  end
+
+  @doc """
+  List all LangGraph session mappings.
+  """
+  @spec list_langgraph_sessions() :: [LangGraphSession.t()]
+  def list_langgraph_sessions do
+    import Ecto.Query
+
+    from(l in LangGraphSession, order_by: [desc: l.updated_at])
+    |> Repo.all()
   end
 end
