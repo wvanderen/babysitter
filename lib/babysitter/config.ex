@@ -130,6 +130,36 @@ defmodule Babysitter.Config do
   def git_normalization, do: get(:git, :normalization) || @default_config.git.normalization
 
   @doc """
+  Get git commit strategy configuration.
+  """
+  @spec git_commit_strategy() :: map()
+  def git_commit_strategy do
+    get(:git, :commit_strategy) || @default_config.git.commit_strategy
+  end
+
+  @doc """
+  Get git commit trigger type.
+  """
+  @spec git_commit_trigger() :: atom()
+  def git_commit_trigger do
+    strategy = git_commit_strategy()
+    trigger = Map.get(strategy, :trigger, "stage_complete")
+
+    trigger
+    |> to_string()
+    |> String.to_atom()
+  end
+
+  @doc """
+  Get git commit message template.
+  """
+  @spec git_commit_template() :: String.t() | nil
+  def git_commit_template do
+    strategy = git_commit_strategy()
+    Map.get(strategy, :message_template)
+  end
+
+  @doc """
   Get intervention configuration.
   """
   @spec intervention() :: map()
