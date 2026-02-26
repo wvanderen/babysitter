@@ -16,7 +16,7 @@ Status: ready-for-dev
 | Task | td Issue | Status |
 |------|----------|--------|
 | Task 1: Create workflow YAML parser module | `td-4c61ec` | **in_review** |
-| Task 2: Implement workflow struct and types | `td-6b2c61` | open |
+| Task 2: Implement workflow struct and types | `td-6b2c61` | **complete** |
 | Task 3: Add workflow loading from directory | `td-d0a3be` | open |
 | Task 4: Implement error handling for invalid YAML | `td-92364e` | open |
 
@@ -62,13 +62,13 @@ So that workflows can be loaded and executed.
   - [x] 1.4: Return `{:ok, workflow_map}` or `{:error, reason}`
   - [x] 1.5: Add helpful error messages with file path context
 
-- [ ] Task 2: Implement workflow struct and types (AC: #1, #3) [td:td-6b2c61]
-  - [ ] 2.1: Create `lib/babysitter/workflow.ex` with `%Workflow{}` struct
-  - [ ] 2.2: Define `@type t` with all required fields
-  - [ ] 2.3: Create `%Workflow.Stage{}` struct for stage representation
-  - [ ] 2.4: Define intelligence level type: `@type intelligence :: :dumb | :smart | :hybrid`
-  - [ ] 2.5: Add `@enforce_keys` for required fields
-  - [ ] 2.6: Implement `__struct__/0` with defaults for optional fields
+- [x] Task 2: Implement workflow struct and types (AC: #1, #3) [td:td-6b2c61]
+  - [x] 2.1: Create `lib/babysitter/workflow.ex` with `%Workflow{}` struct
+  - [x] 2.2: Define `@type t` with all required fields
+  - [x] 2.3: Create `%Workflow.Stage{}` struct for stage representation
+  - [x] 2.4: Define intelligence level type: `@type intelligence :: :dumb | :smart | :hybrid`
+  - [x] 2.5: Add `@enforce_keys` for required fields
+  - [x] 2.6: Implement `__struct__/0` with defaults for optional fields
 
 - [ ] Task 3: Add workflow loading from directory (AC: #4) [td:td-d0a3be]
   - [ ] 3.1: Create `lib/babysitter/workflow/loader.ex` module
@@ -331,6 +331,16 @@ kimi-k2.5 (opencode)
    - Supports workflow struct with stages, validations, transitions, and metadata
    - 41 passing tests covering all functionality
 
+2. **Task 2 Complete**: Workflow struct and types implemented
+   - Created `lib/babysitter/workflow.ex` with `%Workflow{}` struct
+   - Defined `@type t` with fields: id, name, stages, intelligence, transitions, description
+   - Defined `@type intelligence :: :dumb | :smart | :hybrid` type
+   - Added `@enforce_keys [:id, :name, :stages]` for required fields
+   - Implemented struct with defaults: intelligence: :dumb, transitions: nil, description: nil
+   - Added `@derive Jason.Encoder` for JSON serialization
+   - Created helper function `new/4` for easier workflow creation
+   - All 10 tests passing
+
 ### File List
 
 | File | Action | Description |
@@ -339,7 +349,7 @@ kimi-k2.5 (opencode)
 | `lib/babysitter/workflow/stage.ex` | NEW | Stage struct definition |
 | `lib/babysitter/workflow/parser.ex` | NEW | YAML parsing module |
 | `lib/babysitter/workflow/loader.ex` | NEW | Directory loading module |
-| `test/babysitter/workflow_test.exs` | NEW | Workflow struct tests |
+| `test/workflow/workflow_test.exs` | NEW | Workflow struct tests (10 passing) |
 | `test/babysitter/workflow/parser_test.exs` | NEW | Parser tests |
 | `test/babysitter/workflow/loader_test.exs` | NEW | Loader tests |
 
@@ -359,3 +369,4 @@ kimi-k2.5 (opencode)
 |-----------|--------|---------|
 | 2026-02-26T14:45:00Z | initialized | Story created with td epic td-a18b1a and 4 tasks |
 | 2026-02-26T15:00:00Z | task-complete | td-4c61ec: Task 1: Create workflow YAML parser module - All tests passing (41/41) |
+| 2026-02-26T13:52:00Z | task-complete | td-6b2c61: Task 2: Implement workflow struct and types - All tests passing (10/10) |
