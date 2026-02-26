@@ -129,6 +129,11 @@ Runs validation checks.
       regex: "All \\d+ tests passed"
     - type: exit_code
       expected: 0
+    - type: file_exists
+      path: "/tmp/babysitter-demo/data.json"
+    - type: file_contains
+      path: "/tmp/babysitter-demo/data.json"
+      pattern: "slideshow"
   on_success: complete
   on_failure: fix
 ```
@@ -144,6 +149,8 @@ Runs validation checks.
 | `output_contains` | Check output contains pattern | `pattern` |
 | `output_matches` | Check output matches regex | `regex` |
 | `exit_code` | Check command exit code | `expected` |
+| `file_exists` | Check file exists | `path` |
+| `file_contains` | Check file contains pattern | `path`, `pattern` |
 
 ### Decision Stage
 
