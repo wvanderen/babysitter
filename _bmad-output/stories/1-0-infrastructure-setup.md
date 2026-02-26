@@ -49,11 +49,11 @@ So that agent sessions can run and be attachable for debugging.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create tmux verification module (AC: #1, #3) [td:td-0ad925]
-  - [ ] 1.1: Create `lib/babysitter/tmux/verifier.ex` module
-  - [ ] 1.2: Implement `verify_tmux_available/0` function
-  - [ ] 1.3: Return `{:ok, version}` or `{:error, :tmux_not_found}`
-  - [ ] 1.4: Add helpful error message with installation instructions
+- [x] Task 1: Create tmux verification module (AC: #1, #3) [td:td-0ad925]
+  - [x] 1.1: Create `lib/babysitter/tmux/verifier.ex` module
+  - [x] 1.2: Implement `verify_tmux_available/0` function
+  - [x] 1.3: Return `{:ok, version}` or `{:error, :tmux_not_found}`
+  - [x] 1.4: Add helpful error message with installation instructions
 
 - [x] Task 2: Create directory structure on startup (AC: #2) [td:td-052a7a]
   - [x] 2.1: Create `lib/babysitter/setup.ex` module
@@ -62,10 +62,10 @@ So that agent sessions can run and be attachable for debugging.
   - [x] 2.4: Create `data/langgraph/` if missing
   - [x] 2.5: Create `.babysitter/workflows/` if missing
 
-- [ ] Task 3: Integrate setup into application startup (AC: #1, #2, #3) [td:td-97d825]
-  - [ ] 3.1: Add setup check to `application.ex` supervision tree
-  - [ ] 3.2: Fail fast if tmux not available
-  - [ ] 3.3: Log successful setup on startup
+- [x] Task 3: Integrate setup into application startup (AC: #1, #2, #3) [td:td-97d825]
+  - [x] 3.1: Add setup check to `application.ex` supervision tree
+  - [x] 3.2: Fail fast if tmux not available
+  - [x] 3.3: Log successful setup on startup
 
 - [ ] Task 4: Add unit tests (AC: #1, #2, #3) [td:td-2e1730]
   - [ ] 4.1: Test tmux verification success path
@@ -187,12 +187,24 @@ None required - straightforward implementation
 - Added comprehensive unit tests with proper cleanup via `on_exit` callbacks
 - All 4 tests pass
 
+**Task 3 (td-97d825): Integrate setup into application startup**
+- Created `Babysitter.SetupWorker` GenServer for startup verification
+- Added SetupWorker as first child in supervision tree
+- Verifies tmux availability and logs version on startup
+- Creates required directories via `Babysitter.Setup.ensure_directories!/0`
+- Logs "Babysitter setup complete" on successful initialization
+- Application fails to start if tmux is not available (fail-fast)
+- Added unit tests for SetupWorker
+
 ### File List
 
 | File | Action | Description |
 |------|--------|-------------|
 | `lib/babysitter/setup.ex` | NEW | Directory setup module |
 | `test/babysitter/setup_test.exs` | NEW | Unit tests for setup module |
+| `lib/babysitter/setup_worker.ex` | NEW | Startup verification GenServer |
+| `test/babysitter/setup_worker_test.exs` | NEW | Unit tests for SetupWorker |
+| `lib/babysitter/application.ex` | MODIFIED | Added SetupWorker to supervision tree |
 
 ---
 
@@ -202,3 +214,4 @@ None required - straightforward implementation
 |-----------|--------|---------|
 | 2026-02-26T00:00:00Z | initialized | Story created with td epic td-08b291 and 4 tasks |
 | 2026-02-26T11:06Z | task-complete | td-052a7a: Create directory structure on startup |
+| 2026-02-26T11:14Z | task-complete | td-97d825: Integrate setup into application startup |

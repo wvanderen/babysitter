@@ -14,6 +14,7 @@ defmodule Babysitter.Application do
   @impl true
   def start(_type, _args) do
     children = [
+      Babysitter.SetupWorker,
       BabysitterWeb.Telemetry,
       Babysitter.TD.Repo,
       Babysitter.State.Repo,
