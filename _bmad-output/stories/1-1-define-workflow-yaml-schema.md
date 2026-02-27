@@ -7,9 +7,9 @@ Status: ready-for-dev
 ## td Integration
 
 - **td Epic**: `td-0176be`
-- **td Tasks**: 4 issues (4 open, 0 in-progress, 0 blocked)
+- **td Tasks**: 4 issues (1 open, 0 in-progress, 0 blocked, 3 completed/in_review)
 - **Last Sync**: 2026-02-27
-- **Sync Status**: initialized
+- **Sync Status**: active
 
 ### Task → td Mapping
 
@@ -17,8 +17,8 @@ Status: ready-for-dev
 |------|----------|--------|
 | Task 1 | `td-ea10aa` | open |
 | Task 2 | `td-8fe0ae` | in_review |
-| Task 3 | `td-0d89bf` | open |
-| Task 4 | `td-f72b73` | open |
+| Task 3 | `td-0d89bf` | in_review |
+| Task 4 | `td-f72b73` | in_review |
 
 ---
 
@@ -62,10 +62,10 @@ so that I know the correct structure for stages, transitions, and configuration.
   - [x] Create `.babysitter/workflows/feature.yaml` example
   - [x] Ensure examples demonstrate all schema features
 
-- [ ] Task 4: Add documentation to docs/ (AC: #1, #2, #3) [td:td-f72b73]
-  - [ ] Create `docs/workflow-guide.md` with schema reference
-  - [ ] Include troubleshooting section for common errors
-  - [ ] Add quick-start examples
+- [x] Task 4: Add documentation to docs/ (AC: #1, #2, #3) [td:td-f72b73]
+  - [x] Create `docs/workflow-guide.md` with schema reference
+  - [x] Include troubleshooting section for common errors
+  - [x] Add quick-start examples
 
 ## Dev Notes
 
@@ -149,12 +149,25 @@ N/A
 - Transition definition with from, to, condition fields
 - Includes field descriptions, constraints, examples, and conditional validation rules
 
+**Task 4: Add documentation to docs/**
+- Created `docs/workflow-guide.md` - Comprehensive user guide for workflow creation
+- Quick Start section with minimal working example
+- Schema reference for all required/optional fields
+- Stage types reference (action, agent, decision) with examples
+- Validation types reference with usage examples
+- Transitions documentation (inline and explicit formats)
+- Variables documentation with interpolation syntax
+- Three complete example workflows (minimal, development, CI/CD)
+- Troubleshooting section with 14 common errors and fixes
+- Best practices and related documentation links
+
 ### File List
 
 - `.babysitter/workflows/default.yaml` (new)
 - `.babysitter/workflows/bugfix.yaml` (new)
 - `.babysitter/workflows/feature.yaml` (new)
 - `.babysitter/schemas/workflow.schema.json` (new)
+- `docs/workflow-guide.md` (new)
 
 ---
 
@@ -165,3 +178,4 @@ N/A
 | 2026-02-27 | initialized | Story created with td epic td-0176be |
 | 2026-02-27T12:32 | task-complete | td-0d89bf: Add example workflow files |
 | 2026-02-27T12:40 | task-complete | td-8fe0ae: Create JSON Schema for YAML validation |
+| 2026-02-27T12:55 | task-complete | td-f72b73: Add documentation to docs/ |
