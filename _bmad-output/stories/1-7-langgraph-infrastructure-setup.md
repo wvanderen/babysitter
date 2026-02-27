@@ -56,12 +56,12 @@ So that smart intervention and workflow intelligence are available.
   - [x] 2.4: Create `.python-version` specifying Python 3.11
   - [x] 2.5: Create `.env` template for LLM API keys
 
-- [ ] Task 3: Add Docker service (AC: #3) [td:td-8ed104]
-  - [ ] 3.1: Create `langgraph/Dockerfile` for LangGraph service
-  - [ ] 3.2: Add LangGraph service to root `docker-compose.yml`
-  - [ ] 3.3: Configure port binding to 127.0.0.1:8123
-  - [ ] 3.4: Configure health check with `/info` endpoint
-  - [ ] 3.5: Add volume mount for checkpoint data
+- [x] Task 3: Add Docker service (AC: #3) [td:td-8ed104]
+  - [x] 3.1: Create `langgraph/Dockerfile` for LangGraph service
+  - [x] 3.2: Add LangGraph service to root `docker-compose.yml`
+  - [x] 3.3: Configure port binding to 127.0.0.1:8123
+  - [x] 3.4: Configure health check with `/info` endpoint
+  - [x] 3.5: Add volume mount for checkpoint data
 
 - [ ] Task 4: Verify health endpoint (AC: #4) [td:td-124275]
   - [ ] 4.1: Start LangGraph service via docker-compose
@@ -194,7 +194,7 @@ end
 |------|----------|--------|
 | Task 1: Create LangGraph project structure | `td-f91b22` | in_review |
 | Task 2: Create configuration files | `td-654dbb` | in_review |
-| Task 3: Add Docker service | `td-8ed104` | open |
+| Task 3: Add Docker service | `td-8ed104` | in_review |
 | Task 4: Verify health endpoint | `td-124275` | open |
 | Task 5: Verify Elixir connectivity | `td-64fe67` | open |
 
@@ -208,6 +208,7 @@ end
 | 2026-02-26T12:00:00Z | tasks-created | Created 5 td issues under epic td-af8cc8 |
 | 2026-02-26T20:59:00Z | task-complete | td-f91b22: Create LangGraph project structure |
 | 2026-02-26T21:40:00Z | task-complete | td-654dbb: Create configuration files |
+| 2026-02-26T22:15:00Z | task-complete | td-8ed104: Add Docker service |
 
 ## Dev Agent Record
 
@@ -241,3 +242,18 @@ end
 - Included pytest and pytest-asyncio as dev dependencies for testing
 - Added LANGGRAPH_DATA_DIR env var for configurable checkpoint storage path
 - SqliteSaver creates parent directories if they don't exist
+
+### Task 3 Completion Notes
+
+**Implemented:**
+- Created `langgraph/Dockerfile` with Python 3.11-slim base, curl for healthcheck, and langgraph CLI
+- Created root `docker-compose.yml` with langgraph service on 127.0.0.1:8123
+- Configured healthcheck with curl to /info endpoint (30s interval, 10s timeout, 3 retries)
+- Added volume mount for `./data/langgraph:/app/data` for checkpoint persistence
+- Created `langgraph/README.md` to satisfy pyproject.toml requirement
+
+**Key Decisions:**
+- Used `langgraph dev` command for development mode with hot reload
+- Bound to 127.0.0.1 only for security (no external access)
+- Added `restart: unless-stopped` for production resilience
+- Copied .env.example to .env for local development
