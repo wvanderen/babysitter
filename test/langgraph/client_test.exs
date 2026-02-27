@@ -95,10 +95,24 @@ defmodule Babysitter.LangGraph.ClientTest do
   describe "create_run/2" do
     test "creates a run on a thread" do
       client = mock_client()
-      {:ok, response} = Tesla.post(client, "/threads/thread-test/runs", %{input: %{}})
+
+      {:ok, response} =
+        Tesla.post(client, "/threads/thread-test/runs", %{assistant_id: "agent", input: %{}})
 
       assert response.status == 200
       assert response.body["run_id"] != nil
+    end
+
+    test "creates a run with custom assistant_id" do
+      client = mock_client()
+
+      {:ok, response} =
+        Tesla.post(client, "/threads/thread-test/runs", %{
+          assistant_id: "custom-agent",
+          input: %{}
+        })
+
+      assert response.status == 200
     end
   end
 

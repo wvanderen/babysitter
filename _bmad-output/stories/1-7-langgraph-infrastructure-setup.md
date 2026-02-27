@@ -1,6 +1,6 @@
 # Story 1.7: LangGraph Infrastructure Setup
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -211,6 +211,8 @@ end
 | 2026-02-26T22:15:00Z | task-complete | td-8ed104: Add Docker service |
 | 2026-02-27T04:02:00Z | task-complete | td-124275: Verify health endpoint |
 | 2026-02-27T08:45:00Z | task-complete | td-64fe67: Verify Elixir connectivity |
+| 2026-02-27T15:35:00Z | epic-review | Review completed, 4 issues found and fixed |
+| 2026-02-27T15:35:00Z | story-approved | Story 1.7 approved and marked done |
 
 ## Dev Agent Record
 
@@ -303,3 +305,50 @@ end
 - 13 tests added, all passing
 - Mock adapter simulates LangGraph API responses
 - Retry logic tested with counter-based verification
+
+---
+
+## Senior Developer Review (AI)
+
+**Date:** 2026-02-27
+**Outcome:** Approved with fixes
+**Action Items:** 0 (all fixed)
+
+### Summary
+
+Epic-level review found 4 issues (1 HIGH, 3 MEDIUM, 3 LOW). All issues were fixed during review:
+- HIGH: Added integration tests for Client public API functions
+- MEDIUM: Fixed compile-time config capture (now reads at runtime)
+- MEDIUM: Fixed SqliteSaver resource management (added context manager)
+- MEDIUM: Added integration test file with service detection
+- Found and fixed bug: `create_run/2` was missing required `assistant_id` parameter
+
+### Issues Found & Fixed
+
+1. **[HIGH - Fixed]** Test coverage gap for Client public API
+   - Added `test/langgraph/integration_test.exs` with 6 integration tests
+   - Tests call actual Client module functions against running service
+
+2. **[MEDIUM - Fixed]** Compile-time config capture in client.ex
+   - Module attributes `@max_retries` and `@base_delay_ms` captured values at compile time
+   - Changed to read from Config at runtime for dynamic configuration
+
+3. **[MEDIUM - Fixed]** SqliteSaver resource management
+   - Added `get_checkpointer_context()` context manager for proper cleanup
+   - Added explicit sqlite3 connection management
+
+4. **[BUG - Fixed]** Missing `assistant_id` in create_run
+   - LangGraph API requires `assistant_id` parameter for run creation
+   - Updated `create_run/2` to include assistant_id (defaults to "agent")
+   - Supports both keyword list and map arguments
+
+### Files Modified During Review
+
+- `lib/babysitter/langgraph/client.ex` - Fixed config, fixed create_run
+- `langgraph/src/babysitter_agent/checkpointer.py` - Added context manager
+- `test/langgraph/client_test.exs` - Updated for new create_run signature
+- `test/langgraph/integration_test.exs` - New file with integration tests
+
+### Final Test Count
+- 20 tests in langgraph test suite (all passing)
+- 6 integration tests (auto-skip if service unavailable)

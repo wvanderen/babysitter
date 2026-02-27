@@ -14,9 +14,6 @@ defmodule Babysitter.LangGraph.Client do
   plug(Tesla.Middleware.JSON)
   plug(Tesla.Middleware.Timeout, timeout: Config.timeout())
 
-  @max_retries Config.max_retries()
-  @base_delay_ms Config.base_delay_ms()
-
   @doc """
   Check if the LangGraph service is healthy.
 
@@ -61,10 +58,25 @@ defmodule Babysitter.LangGraph.Client do
   Start a run on a thread.
 
   Returns `{:ok, response}` with run_id on success or `{:error, reason}` on failure.
+
+  The `assistant_id` is required by LangGraph API. Defaults to "agent".
   """
-  @spec create_run(String.t(), map()) :: {:ok, Tesla.Env.t()} | {:error, term()}
-  def create_run(thread_id, input \\ %{}) when is_binary(thread_id) do
-    with_retry(fn -> post("/threads/#{thread_id}/runs", %{input: input}) end)
+  @spec create_run(String.t(), keyword() | map()) :: {:ok, Tesla.Env.t()} | {:error, term()}
+  def create_run(thread_id, opts \\ [])
+
+  def create_run(thread_id, opts) when is_binary(thread_id) and is_list(opts) do
+    assistant_id = Keyword.get(opts, :assistant_id, "agent")
+    input = Keyword.get(opts, :input, %{})
+
+    with_retry(fn ->
+      post("/threads/#{thread_id}/runs", %{assistant_id: assistant_id, input: input})
+    end)
+  end
+
+  def create_run(thread_id, input) when is_binary(thread_id) and is_map(input) do
+    with_retry(fn ->
+      post("/threads/#{thread_id}/runs", %{assistant_id: "agent", input: input})
+    end)
   end
 
   @doc """
@@ -80,17 +92,21 @@ defmodule Babysitter.LangGraph.Client do
   @doc """
   Execute a function with retry logic using exponential backoff.
 
-  Retries up to `@max_retries` times with exponential delay between attempts.
+  Retries up to max_retries times with exponential delay between attempts.
+  Config values are read at runtime for dynamic configuration.
   """
   @spec with_retry((-> {:ok, term()} | {:error, term()}), non_neg_integer()) ::
           {:ok, term()} | {:error, term()}
   def with_retry(fun, attempt \\ 1) do
+    max_retries = Config.max_retries()
+    base_delay_ms = Config.base_delay_ms()
+
     case fun.() do
       {:ok, response} ->
         {:ok, response}
 
-      {:error, _reason} when attempt < @max_retries ->
-        delay = trunc(@base_delay_ms * :math.pow(2, attempt - 1))
+      {:error, _reason} when attempt < max_retries ->
+        delay = trunc(base_delay_ms * :math.pow(2, attempt - 1))
         Process.sleep(delay)
         with_retry(fun, attempt + 1)
 
