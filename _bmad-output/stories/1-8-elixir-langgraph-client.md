@@ -54,10 +54,10 @@ So that Elixir can manage workflow threads and runs.
   - [x] 3.3: Add retry logic tests for error scenarios
   - [x] 3.4: Add tests for all command types (resume, approve, reject)
 
-- [ ] Task 4: Update documentation (AC: #1, #2, #3, #4) [td:td-18aa0c]
-  - [ ] 4.1: Add @moduledoc with usage examples
-  - [ ] 4.2: Add @doc for all public functions
-  - [ ] 4.3: Add typespec for all public functions
+- [x] Task 4: Update documentation (AC: #1, #2, #3, #4) [td:td-18aa0c]
+  - [x] 4.1: Add @moduledoc with usage examples
+  - [x] 4.2: Add @doc for all public functions
+  - [x] 4.3: Add typespec for all public functions
 
 ## Dev Notes
 
@@ -172,7 +172,7 @@ Or with value:
 | Task 1: Implement run lifecycle functions | `td-289b2c` | in_review |
 | Task 2: Implement interrupt/resume functions | `td-50b572` | in_review |
 | Task 3: Add comprehensive tests | `td-6c2d16` | in_review |
-| Task 4: Update documentation | `td-18aa0c` | open |
+| Task 4: Update documentation | `td-18aa0c` | in_review |
 
 ---
 
@@ -216,6 +216,14 @@ Or with value:
 - Added tests for create_run/2 with optional params (stream_mode, config, webhook)
 - Total: 35 tests (27 unit + 8 integration), all passing
 
+**Task 4: Update Documentation (2026-02-27)**
+- Enhanced @moduledoc with comprehensive usage examples
+- Added Configuration section with environment variables
+- Added usage examples for: health check, thread management, run lifecycle, interrupt/resume flow
+- Added error handling documentation
+- Added state mapping table (LangGraph status to description)
+- All public functions already had @doc and @spec from previous tasks
+
 ---
 
 ## td Sync Log
@@ -227,3 +235,4 @@ Or with value:
 | 2026-02-27T09:52:00Z | task-complete | td-289b2c: Task 1: Implement run lifecycle functions |
 | 2026-02-27T09:56:00Z | task-complete | td-50b572: Task 2: Implement interrupt/resume functions |
 | 2026-02-27T10:04:00Z | task-complete | td-6c2d16: Task 3: Add comprehensive tests |
+| 2026-02-27T10:12:00Z | task-complete | td-18aa0c: Task 4: Update documentation |

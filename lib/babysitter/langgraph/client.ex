@@ -3,7 +3,94 @@ defmodule Babysitter.LangGraph.Client do
   Client for communicating with the LangGraph service.
 
   Provides functions for health checks, thread management, and run execution
-  with automatic retry logic using exponential backoff.
+  with automatic retry logic using exponential backoff (1s, 2s, 4s delays).
+
+  ## Configuration
+
+  The client is configured via application environment:
+
+      config :babysitter, Babysitter.LangGraph.Config,
+        base_url: "http://127.0.0.1:8123",
+        timeout: 30_000,
+        max_retries: 3,
+        base_delay_ms: 1000
+
+  ## Usage Examples
+
+  ### Health Check
+
+      # Check if service is running
+      {:ok, _response} = Babysitter.LangGraph.Client.health_check()
+
+      # Boolean check
+      if Babysitter.LangGraph.Client.healthy?(), do: :ok, else: :error
+
+  ### Thread Management
+
+      # Create a new thread
+      {:ok, %Tesla.Env{body: %{"thread_id" => thread_id}}} =
+        Babysitter.LangGraph.Client.create_thread()
+
+      # Create with specific assistant
+      {:ok, response} = Babysitter.LangGraph.Client.create_thread("my-assistant")
+
+      # Get thread details
+      {:ok, response} = Babysitter.LangGraph.Client.get_thread(thread_id)
+
+  ### Run Lifecycle
+
+      # Start a run with input
+      {:ok, %Tesla.Env{body: %{"run_id" => run_id}}} =
+        Babysitter.LangGraph.Client.create_run(thread_id, input: %{message: "Hello"})
+
+      # Start with options
+      {:ok, response} =
+        Babysitter.LangGraph.Client.create_run(thread_id,
+          assistant_id: "agent",
+          input: %{query: "Search for X"},
+          stream_mode: "values"
+        )
+
+      # Poll run status
+      {:ok, %Tesla.Env{body: %{"status" => status}}} =
+        Babysitter.LangGraph.Client.get_run_status(thread_id, run_id)
+
+      # Check if interrupted
+      {:ok, true} = Babysitter.LangGraph.Client.interrupted?(thread_id, run_id)
+
+      # Cancel a run
+      {:ok, _response} = Babysitter.LangGraph.Client.cancel_run(thread_id, run_id)
+
+      # List all runs for a thread
+      {:ok, %Tesla.Env{body: runs}} = Babysitter.LangGraph.Client.list_runs(thread_id)
+
+  ### Interrupt/Resume Flow
+
+      # Resume with a value
+      {:ok, response} =
+        Babysitter.LangGraph.Client.resume_run(thread_id, run_id, {:resume, %{"action" => "continue"}})
+
+      # Approve and continue
+      {:ok, response} = Babysitter.LangGraph.Client.resume_run(thread_id, run_id, :approve)
+
+      # Reject and stop
+      {:ok, response} = Babysitter.LangGraph.Client.resume_run(thread_id, run_id, :reject)
+
+  ## Error Handling
+
+  All functions return `{:ok, Tesla.Env.t()}` on success or `{:error, reason}` on failure.
+  Functions automatically retry with exponential backoff (1s, 2s, 4s) up to max_retries.
+
+  ## State Mapping
+
+  | LangGraph Status | Description |
+  |------------------|-------------|
+  | `pending`        | Run is queued |
+  | `running`        | Run is executing |
+  | `interrupted`    | Run paused for input |
+  | `completed`      | Run finished successfully |
+  | `error`          | Run failed |
+  | `cancelled`      | Run was cancelled |
   """
 
   use Tesla
