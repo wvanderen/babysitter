@@ -25,6 +25,7 @@ defmodule Babysitter.Application do
       {Registry, keys: :unique, name: Babysitter.WorkflowRegistry},
       {DynamicSupervisor, strategy: :one_for_one, name: Babysitter.SessionSupervisor},
       Babysitter.SessionManager,
+      Babysitter.SessionRecoveryWorker,
       {DynamicSupervisor, strategy: :one_for_one, name: Babysitter.WorkflowSupervisor},
       BabysitterWeb.Endpoint
     ]

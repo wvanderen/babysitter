@@ -94,6 +94,64 @@ defmodule Babysitter.Session do
     GenServer.start_link(__MODULE__, opts, name: name)
   end
 
+  @doc """
+  Start a session in recovery mode, attaching to an existing tmux session.
+
+  Unlike start_link/1, this does not create a new tmux session.
+  It attaches to an existing tmux session and restores state from persistence.
+
+  ## Options
+
+    * `:tmux_name` - Required. Name of the existing tmux session
+    * `:status` - Status to restore (overrides persisted value)
+    * `:started_at` - Original start time (overrides persisted value)
+    * `:output_buffer` - Restored output buffer (overrides persisted value)
+    * `:metadata` - Restored metadata (overrides persisted value)
+    * `:failure_reason` - Restored failure reason (overrides persisted value)
+    * `:escalation_reason` - Restored escalation reason (overrides persisted value)
+    * `:validation_results` - Restored validation results (overrides persisted value)
+
+  ## Examples
+
+      {:ok, pid} = Session.start_recovery("session-123", tmux_name: "babysitter-session-123")
+  """
+  @spec start_recovery(session_id(), keyword()) :: {:ok, pid()} | {:error, term()}
+  def start_recovery(id, opts) do
+    tmux_name = Keyword.fetch!(opts, :tmux_name)
+
+    if Babysitter.Tmux.session_exists?(tmux_name) do
+      opts = Keyword.put(opts, :id, id)
+      opts = Keyword.put(opts, :recovery_mode, true)
+
+      opts =
+        case Babysitter.State.Persistence.load_session(id) do
+          {:ok, persisted} ->
+            merge_persisted_state(opts, persisted)
+
+          {:error, :not_found} ->
+            opts
+        end
+
+      DynamicSupervisor.start_child(Babysitter.SessionSupervisor, {__MODULE__, opts})
+    else
+      {:error, {:tmux_not_found, tmux_name}}
+    end
+  end
+
+  defp merge_persisted_state(opts, persisted) do
+    defaults = [
+      status: String.to_existing_atom(persisted.status),
+      started_at: persisted.started_at,
+      output_buffer: persisted.output_buffer,
+      metadata: persisted.metadata,
+      failure_reason: persisted.failure_reason,
+      escalation_reason: persisted.escalation_reason,
+      validation_results: persisted.validation_results
+    ]
+
+    Keyword.merge(defaults, opts)
+  end
+
   def via_tuple(id) do
     {:via, Registry, {Babysitter.SessionRegistry, id}}
   end
@@ -176,11 +234,20 @@ defmodule Babysitter.Session do
   @impl true
   def init(opts) do
     id = Keyword.fetch!(opts, :id)
+    recovery_mode = Keyword.get(opts, :recovery_mode, false)
     tmux_name = Keyword.get(opts, :tmux_name, "babysitter-#{id}")
     max_buffer = Keyword.get(opts, :max_buffer_size, 100_000)
     metadata = Keyword.get(opts, :metadata, %{})
     agent = Keyword.get(opts, :agent)
 
+    if recovery_mode do
+      init_recovery(id, tmux_name, max_buffer, opts)
+    else
+      init_new(id, tmux_name, max_buffer, metadata, agent)
+    end
+  end
+
+  defp init_new(id, tmux_name, max_buffer, metadata, agent) do
     case Babysitter.Tmux.create_session(tmux_name) do
       :ok ->
         state = %__MODULE__{
@@ -200,6 +267,51 @@ defmodule Babysitter.Session do
         {:stop, {:tmux_error, reason}}
     end
   end
+
+  defp init_recovery(id, tmux_name, max_buffer, opts) do
+    status = Keyword.get(opts, :status, :running)
+    started_at = Keyword.get(opts, :started_at)
+    output_buffer = Keyword.get(opts, :output_buffer, "")
+    metadata = Keyword.get(opts, :metadata, %{})
+    failure_reason = Keyword.get(opts, :failure_reason)
+    escalation_reason = Keyword.get(opts, :escalation_reason)
+    validation_results = Keyword.get(opts, :validation_results, %{})
+
+    validation_results = atomize_validation_keys(validation_results)
+
+    state = %__MODULE__{
+      id: id,
+      tmux_name: tmux_name,
+      status: status,
+      started_at: started_at && convert_datetime(started_at),
+      output_buffer: output_buffer,
+      buffer_size: byte_size(output_buffer),
+      max_buffer_size: max_buffer,
+      metadata: metadata,
+      failure_reason: failure_reason,
+      escalation_reason: escalation_reason,
+      validation_results: validation_results,
+      agent: nil,
+      agent_started: false
+    }
+
+    {:ok, state}
+  end
+
+  defp convert_datetime(%NaiveDateTime{} = dt), do: dt
+  defp convert_datetime(datetime), do: datetime
+
+  defp atomize_validation_keys(results) when is_map(results) do
+    results
+    |> Enum.map(fn {k, v} -> {maybe_atomize(k), v} end)
+    |> Map.new()
+  end
+
+  defp atomize_validation_keys(results), do: results
+
+  defp maybe_atomize(key) when is_atom(key), do: key
+  defp maybe_atomize(key) when is_binary(key), do: String.to_existing_atom(key)
+  defp maybe_atomize(key), do: key
 
   @doc """
   Ensure the agent is started in this session.
