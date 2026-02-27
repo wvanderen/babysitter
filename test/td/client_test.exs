@@ -1,7 +1,7 @@
 defmodule Babysitter.TD.ClientTest do
   use ExUnit.Case, async: false
 
-  alias Babysitter.TD.{Client, Issue, Repo}
+  alias Babysitter.TD.{Client, Handoff, Issue, Repo}
 
   setup do
     now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
@@ -30,6 +30,7 @@ defmodule Babysitter.TD.ClientTest do
     })
 
     on_exit(fn ->
+      Repo.delete_all(Handoff)
       Repo.delete_all(Issue)
     end)
 
@@ -127,6 +128,82 @@ defmodule Babysitter.TD.ClientTest do
     test "returns 0 for non-existent status" do
       count = Client.count_by_status("nonexistent")
       assert count == 0
+    end
+  end
+
+  describe "get_latest_handoff/1" do
+    test "returns nil when no handoffs exist" do
+      assert Client.get_latest_handoff("td-test-1") == nil
+    end
+
+    test "returns latest handoff for issue" do
+      now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+      earlier = NaiveDateTime.add(now, -3600, :second)
+
+      Repo.insert!(%Handoff{
+        id: "handoff-1",
+        issue_id: "td-test-1",
+        session_id: "session-1",
+        done: ~s(["Task completed"]),
+        remaining: ~s(["Task remaining"]),
+        decisions: ~s(["Decision made"]),
+        uncertain: ~s(["Uncertain item"]),
+        timestamp: earlier
+      })
+
+      Repo.insert!(%Handoff{
+        id: "handoff-2",
+        issue_id: "td-test-1",
+        session_id: "session-2",
+        done: ~s(["Later task"]),
+        remaining: ~s([]),
+        decisions: ~s([]),
+        uncertain: ~s([]),
+        timestamp: now
+      })
+
+      handoff = Client.get_latest_handoff("td-test-1")
+      assert handoff != nil
+      assert handoff.id == "handoff-2"
+      assert handoff.done == ~s(["Later task"])
+    end
+  end
+
+  describe "get_handoffs/1" do
+    test "returns empty list when no handoffs exist" do
+      assert Client.get_handoffs("td-test-1") == []
+    end
+
+    test "returns all handoffs for issue ordered by timestamp desc" do
+      now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+      earlier = NaiveDateTime.add(now, -3600, :second)
+
+      Repo.insert!(%Handoff{
+        id: "handoff-old",
+        issue_id: "td-test-1",
+        session_id: "session-1",
+        done: ~s(["Old"]),
+        remaining: ~s([]),
+        decisions: ~s([]),
+        uncertain: ~s([]),
+        timestamp: earlier
+      })
+
+      Repo.insert!(%Handoff{
+        id: "handoff-new",
+        issue_id: "td-test-1",
+        session_id: "session-2",
+        done: ~s(["New"]),
+        remaining: ~s([]),
+        decisions: ~s([]),
+        uncertain: ~s([]),
+        timestamp: now
+      })
+
+      handoffs = Client.get_handoffs("td-test-1")
+      assert length(handoffs) == 2
+      assert hd(handoffs).id == "handoff-new"
+      assert List.last(handoffs).id == "handoff-old"
     end
   end
 end

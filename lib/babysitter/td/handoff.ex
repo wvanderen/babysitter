@@ -33,33 +33,25 @@ defmodule Babysitter.TD.Handoff do
   Parse the done field as a list.
   """
   @spec parse_done(t()) :: [String.t()]
-  def parse_done(%__MODULE__{done: done}) when is_binary(done) do
-    parse_json_list(done)
-  end
+  def parse_done(%__MODULE__{done: done}), do: parse_json_list(done)
 
   @doc """
   Parse the remaining field as a list.
   """
   @spec parse_remaining(t()) :: [String.t()]
-  def parse_remaining(%__MODULE__{remaining: remaining}) when is_binary(remaining) do
-    parse_json_list(remaining)
-  end
+  def parse_remaining(%__MODULE__{remaining: remaining}), do: parse_json_list(remaining)
 
   @doc """
   Parse the decisions field as a list.
   """
   @spec parse_decisions(t()) :: [String.t()]
-  def parse_decisions(%__MODULE__{decisions: decisions}) when is_binary(decisions) do
-    parse_json_list(decisions)
-  end
+  def parse_decisions(%__MODULE__{decisions: decisions}), do: parse_json_list(decisions)
 
   @doc """
   Parse the uncertain field as a list.
   """
   @spec parse_uncertain(t()) :: [String.t()]
-  def parse_uncertain(%__MODULE__{uncertain: uncertain}) when is_binary(uncertain) do
-    parse_json_list(uncertain)
-  end
+  def parse_uncertain(%__MODULE__{uncertain: uncertain}), do: parse_json_list(uncertain)
 
   defp parse_json_list(""), do: []
   defp parse_json_list(nil), do: []
