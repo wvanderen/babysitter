@@ -36,7 +36,9 @@ defmodule Babysitter.Session do
              :escalation_reason,
              :validation_results,
              :agent,
-             :agent_started
+             :agent_started,
+             :langgraph_thread_id,
+             :langgraph_checkpoint_id
            ]}
   @type t :: %__MODULE__{
           id: session_id(),
@@ -49,7 +51,9 @@ defmodule Babysitter.Session do
           metadata: map(),
           validation_results: %{optional(term()) => [Babysitter.Validation.Result.t()]},
           agent: atom() | nil,
-          agent_started: boolean()
+          agent_started: boolean(),
+          langgraph_thread_id: String.t() | nil,
+          langgraph_checkpoint_id: String.t() | nil
         }
 
   @enforce_keys [:id]
@@ -66,7 +70,9 @@ defmodule Babysitter.Session do
     escalation_reason: nil,
     validation_results: %{},
     agent: nil,
-    agent_started: false
+    agent_started: false,
+    langgraph_thread_id: nil,
+    langgraph_checkpoint_id: nil
   ]
 
   @valid_transitions %{
@@ -231,6 +237,16 @@ defmodule Babysitter.Session do
     GenServer.call(via_tuple(id), {:clear_validation_results, stage_id})
   end
 
+  @spec set_langgraph_thread(session_id(), String.t()) :: :ok
+  def set_langgraph_thread(id, thread_id) do
+    GenServer.call(via_tuple(id), {:set_langgraph_thread, thread_id})
+  end
+
+  @spec update_langgraph_checkpoint(session_id(), String.t()) :: :ok | {:error, term()}
+  def update_langgraph_checkpoint(id, checkpoint_id) do
+    GenServer.call(via_tuple(id), {:update_langgraph_checkpoint, checkpoint_id})
+  end
+
   @impl true
   def init(opts) do
     id = Keyword.fetch!(opts, :id)
@@ -279,6 +295,12 @@ defmodule Babysitter.Session do
 
     validation_results = atomize_validation_keys(validation_results)
 
+    {langgraph_thread_id, langgraph_checkpoint_id} =
+      case Babysitter.State.Persistence.get_langgraph_session(id) do
+        nil -> {nil, nil}
+        mapping -> {mapping.thread_id, mapping.checkpoint_id}
+      end
+
     state = %__MODULE__{
       id: id,
       tmux_name: tmux_name,
@@ -292,7 +314,9 @@ defmodule Babysitter.Session do
       escalation_reason: escalation_reason,
       validation_results: validation_results,
       agent: nil,
-      agent_started: false
+      agent_started: false,
+      langgraph_thread_id: langgraph_thread_id,
+      langgraph_checkpoint_id: langgraph_checkpoint_id
     }
 
     {:ok, state}
@@ -508,6 +532,27 @@ defmodule Babysitter.Session do
   def handle_call({:clear_validation_results, stage_id}, _from, state) do
     new_results = Map.delete(state.validation_results, stage_id)
     {:reply, :ok, %{state | validation_results: new_results}}
+  end
+
+  def handle_call({:set_langgraph_thread, thread_id}, _from, state) do
+    {:reply, :ok, %{state | langgraph_thread_id: thread_id}}
+  end
+
+  def handle_call({:update_langgraph_checkpoint, checkpoint_id}, _from, state) do
+    case state.langgraph_thread_id do
+      nil ->
+        {:reply, {:error, :no_thread_set}, state}
+
+      thread_id ->
+        {:ok, _} =
+          Babysitter.State.Persistence.save_langgraph_session(%{
+            session_id: state.id,
+            thread_id: thread_id,
+            checkpoint_id: checkpoint_id
+          })
+
+        {:reply, :ok, %{state | langgraph_checkpoint_id: checkpoint_id}}
+    end
   end
 
   @impl true

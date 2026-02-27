@@ -353,6 +353,83 @@ defmodule Babysitter.SessionTest do
     end
   end
 
+  describe "langgraph checkpoint tracking" do
+    test "starts with nil langgraph thread and checkpoint", %{session_id: id} do
+      {:ok, _pid} = start_session(id)
+
+      {:ok, state} = Session.get_state(id)
+      assert state.langgraph_thread_id == nil
+      assert state.langgraph_checkpoint_id == nil
+
+      stop_session(id)
+    end
+
+    test "sets langgraph thread id", %{session_id: id} do
+      {:ok, _pid} = start_session(id)
+
+      :ok = Session.set_langgraph_thread(id, "thread-123")
+
+      {:ok, state} = Session.get_state(id)
+      assert state.langgraph_thread_id == "thread-123"
+
+      stop_session(id)
+    end
+
+    test "updates langgraph checkpoint id", %{session_id: id} do
+      {:ok, _pid} = start_session(id)
+
+      :ok = Session.set_langgraph_thread(id, "thread-123")
+      :ok = Session.update_langgraph_checkpoint(id, "checkpoint-456")
+
+      {:ok, state} = Session.get_state(id)
+      assert state.langgraph_checkpoint_id == "checkpoint-456"
+
+      stop_session(id)
+    end
+
+    test "persists checkpoint to database", %{session_id: id} do
+      {:ok, _pid} = start_session(id)
+
+      :ok = Session.set_langgraph_thread(id, "thread-789")
+      :ok = Session.update_langgraph_checkpoint(id, "checkpoint-abc")
+
+      mapping = Babysitter.State.Persistence.get_langgraph_session(id)
+      assert mapping != nil
+      assert mapping.thread_id == "thread-789"
+      assert mapping.checkpoint_id == "checkpoint-abc"
+
+      stop_session(id)
+    end
+
+    test "restores langgraph mapping on recovery" do
+      id = "test-recover-#{:rand.uniform(1_000_000)}"
+      tmux_name = "babysitter-#{id}"
+
+      Babysitter.Tmux.create_session(tmux_name)
+
+      Babysitter.State.Persistence.save_session(%{
+        id: id,
+        status: :running,
+        tmux_name: tmux_name,
+        started_at: DateTime.utc_now() |> DateTime.to_naive()
+      })
+
+      Babysitter.State.Persistence.save_langgraph_session(%{
+        session_id: id,
+        thread_id: "restored-thread",
+        checkpoint_id: "restored-checkpoint"
+      })
+
+      {:ok, _pid} = Session.start_recovery(id, tmux_name: tmux_name)
+
+      {:ok, state} = Session.get_state(id)
+      assert state.langgraph_thread_id == "restored-thread"
+      assert state.langgraph_checkpoint_id == "restored-checkpoint"
+
+      Session.stop(id)
+    end
+  end
+
   defp start_session(id, opts \\ []) do
     opts = Keyword.put(opts, :id, id)
     DynamicSupervisor.start_child(Babysitter.SessionSupervisor, {Session, opts})
