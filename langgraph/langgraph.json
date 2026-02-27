@@ -1,0 +1,8 @@
+{
+  "python_version": "3.11",
+  "dependencies": ["."],
+  "graphs": {
+    "agent": "./src/babysitter_agent/graph.py:get_compiled_graph"
+  },
+  "env": ".env"
+}

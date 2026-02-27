@@ -3,16 +3,18 @@
 import os
 from pathlib import Path
 
-from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.sqlite import SqliteSaver
 
 
 def get_checkpointer():
     """Get the checkpointer for persisting workflow state.
 
-    Uses MemorySaver as placeholder. Will be replaced with SqliteSaver
-    when configuration files are complete.
+    Uses SqliteSaver with a persistent database file.
+    The database path is configured via LANGGRAPH_DATA_DIR env var.
     """
-    return MemorySaver()
+    db_path = get_sqlite_path()
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    return SqliteSaver.from_conn_string(str(db_path))
 
 
 def get_sqlite_path() -> Path:

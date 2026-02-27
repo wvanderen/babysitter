@@ -49,12 +49,12 @@ So that smart intervention and workflow intelligence are available.
   - [x] 1.4: Create `src/babysitter_agent/state.py` with TypedDict definitions
   - [x] 1.5: Create `src/babysitter_agent/checkpointer.py` with SqliteSaver config
 
-- [ ] Task 2: Create configuration files (AC: #2) [td:td-654dbb]
-  - [ ] 2.1: Create `langgraph.json` with workflow graph config
-  - [ ] 2.2: Create `pyproject.toml` with dependencies
-  - [ ] 2.3: Create `requirements.txt` for pip compatibility
-  - [ ] 2.4: Create `.python-version` specifying Python 3.11
-  - [ ] 2.5: Create `.env` template for LLM API keys
+- [x] Task 2: Create configuration files (AC: #2) [td:td-654dbb]
+  - [x] 2.1: Create `langgraph.json` with workflow graph config
+  - [x] 2.2: Create `pyproject.toml` with dependencies
+  - [x] 2.3: Create `requirements.txt` for pip compatibility
+  - [x] 2.4: Create `.python-version` specifying Python 3.11
+  - [x] 2.5: Create `.env` template for LLM API keys
 
 - [ ] Task 3: Add Docker service (AC: #3) [td:td-8ed104]
   - [ ] 3.1: Create `langgraph/Dockerfile` for LangGraph service
@@ -193,7 +193,7 @@ end
 | Task | td Issue | Status |
 |------|----------|--------|
 | Task 1: Create LangGraph project structure | `td-f91b22` | in_review |
-| Task 2: Create configuration files | `td-654dbb` | open |
+| Task 2: Create configuration files | `td-654dbb` | in_review |
 | Task 3: Add Docker service | `td-8ed104` | open |
 | Task 4: Verify health endpoint | `td-124275` | open |
 | Task 5: Verify Elixir connectivity | `td-64fe67` | open |
@@ -207,6 +207,7 @@ end
 | 2026-02-26T12:00:00Z | story-created | Story 1.7 created with td epic td-af8cc8 |
 | 2026-02-26T12:00:00Z | tasks-created | Created 5 td issues under epic td-af8cc8 |
 | 2026-02-26T20:59:00Z | task-complete | td-f91b22: Create LangGraph project structure |
+| 2026-02-26T21:40:00Z | task-complete | td-654dbb: Create configuration files |
 
 ## Dev Agent Record
 
@@ -224,3 +225,19 @@ end
 - Used MemorySaver as checkpointer placeholder until SqliteSaver configured in Task 2
 - Graph uses conditional edges for action_needed vs no_action routing
 - State uses Annotated types with `add` operator for list accumulation
+
+### Task 2 Completion Notes
+
+**Implemented:**
+- Created `langgraph/langgraph.json` with workflow graph config (points to get_compiled_graph)
+- Created `langgraph/pyproject.toml` with dependencies (langgraph, langchain, langchain-openai, langgraph-checkpoint-sqlite)
+- Created `langgraph/requirements.txt` for pip compatibility
+- Created `langgraph/.python-version` specifying Python 3.11
+- Created `langgraph/.env.example` template for LLM API keys (OPENAI_API_KEY, LangSmith options)
+- Updated `checkpointer.py` to use SqliteSaver instead of MemorySaver
+
+**Key Decisions:**
+- Used langgraph.json to define graph export path: `./src/babysitter_agent/graph.py:get_compiled_graph`
+- Included pytest and pytest-asyncio as dev dependencies for testing
+- Added LANGGRAPH_DATA_DIR env var for configurable checkpoint storage path
+- SqliteSaver creates parent directories if they don't exist

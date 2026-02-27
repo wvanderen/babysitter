@@ -1,6 +1,7 @@
 .sidecar
 .todos
 .env*
+!.env.example
 
 /_build
 /cover
