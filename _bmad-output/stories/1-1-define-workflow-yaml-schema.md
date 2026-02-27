@@ -16,7 +16,7 @@ Status: ready-for-dev
 | Task | td Issue | Status |
 |------|----------|--------|
 | Task 1 | `td-ea10aa` | open |
-| Task 2 | `td-8fe0ae` | open |
+| Task 2 | `td-8fe0ae` | in_review |
 | Task 3 | `td-0d89bf` | open |
 | Task 4 | `td-f72b73` | open |
 
@@ -50,11 +50,11 @@ so that I know the correct structure for stages, transitions, and configuration.
   - [ ] Document transition syntax and stage references
   - [ ] Add examples for common workflow patterns (default, bugfix, feature)
 
-- [ ] Task 2: Create JSON Schema for YAML validation (AC: #3) [td:td-8fe0ae]
-  - [ ] Define JSON Schema for workflow structure
-  - [ ] Include all required and optional fields
-  - [ ] Add field descriptions and constraints
-  - [ ] Save to `.babysitter/schemas/workflow.schema.json`
+- [x] Task 2: Create JSON Schema for YAML validation (AC: #3) [td:td-8fe0ae]
+  - [x] Define JSON Schema for workflow structure
+  - [x] Include all required and optional fields
+  - [x] Add field descriptions and constraints
+  - [x] Save to `.babysitter/schemas/workflow.schema.json`
 
 - [x] Task 3: Add example workflow files (AC: #1) [td:td-0d89bf]
   - [x] Create `.babysitter/workflows/default.yaml` with full example
@@ -140,11 +140,21 @@ N/A
 - Created `bugfix.yaml` - Bug fix workflow with triage, reproduce, diagnose, fix, and verify stages demonstrating smart intelligence level and error handling
 - Created `feature.yaml` - Feature development workflow from kickoff to PR preparation demonstrating hybrid intelligence, integration testing, and code review stages
 
+**Task 2: Create JSON Schema for YAML validation**
+- Created `workflow.schema.json` - Complete JSON Schema (Draft-07) for workflow YAML validation
+- Defines all required fields: id, name, stages
+- Defines all optional fields: description, intelligence, variables, transitions, entry_point
+- Stage definition supports: action, agent, decision types with appropriate fields
+- Validation types: output_contains, file_exists, file_contains, compile, tests
+- Transition definition with from, to, condition fields
+- Includes field descriptions, constraints, examples, and conditional validation rules
+
 ### File List
 
 - `.babysitter/workflows/default.yaml` (new)
 - `.babysitter/workflows/bugfix.yaml` (new)
 - `.babysitter/workflows/feature.yaml` (new)
+- `.babysitter/schemas/workflow.schema.json` (new)
 
 ---
 
@@ -154,3 +164,4 @@ N/A
 |-----------|--------|---------|
 | 2026-02-27 | initialized | Story created with td epic td-0176be |
 | 2026-02-27T12:32 | task-complete | td-0d89bf: Add example workflow files |
+| 2026-02-27T12:40 | task-complete | td-8fe0ae: Create JSON Schema for YAML validation |

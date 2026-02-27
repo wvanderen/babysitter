@@ -1,0 +1,197 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://babysitter.dev/schemas/workflow.schema.json",
+  "title": "Workflow Configuration",
+  "description": "Schema for Babysitter workflow YAML files",
+  "type": "object",
+  "required": ["id", "name", "stages"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique workflow identifier",
+      "pattern": "^[a-z0-9_-]+$",
+      "examples": ["default", "bugfix", "feature"]
+    },
+    "name": {
+      "type": "string",
+      "description": "Human-readable workflow name",
+      "minLength": 1,
+      "examples": ["Default Workflow", "Bug Fix Workflow"]
+    },
+    "description": {
+      "type": "string",
+      "description": "Optional description of the workflow's purpose"
+    },
+    "intelligence": {
+      "type": "string",
+      "description": "Intelligence level for agent decision-making",
+      "enum": ["dumb", "smart", "hybrid"],
+      "default": "hybrid"
+    },
+    "variables": {
+      "type": "object",
+      "description": "Workflow-level variables that can be referenced using {{variable}} syntax",
+      "additionalProperties": {
+        "oneOf": [
+          { "type": "string" },
+          { "type": "number" },
+          { "type": "boolean" }
+        ]
+      },
+      "examples": [
+        {
+          "project_root": ".",
+          "test_timeout": "5m",
+          "build_timeout": "10m"
+        }
+      ]
+    },
+    "stages": {
+      "type": "array",
+      "description": "List of stage definitions that make up the workflow",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/definitions/stage"
+      }
+    },
+    "transitions": {
+      "type": "array",
+      "description": "Explicit stage transition rules",
+      "items": {
+        "$ref": "#/definitions/transition"
+      }
+    },
+    "entry_point": {
+      "type": "string",
+      "description": "ID of the first stage to execute",
+      "minLength": 1
+    }
+  },
+  "definitions": {
+    "stage": {
+      "type": "object",
+      "required": ["id", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique stage identifier within the workflow",
+          "pattern": "^[a-z0-9_]+$",
+          "minLength": 1,
+          "examples": ["setup", "analyze", "implement", "complete"]
+        },
+        "type": {
+          "type": "string",
+          "description": "Stage type determining execution behavior",
+          "enum": ["action", "agent", "decision"],
+          "examples": ["action", "agent", "decision"]
+        },
+        "command": {
+          "type": "string",
+          "description": "Shell command to execute (required for 'action' type)",
+          "minLength": 1
+        },
+        "prompt": {
+          "type": "string",
+          "description": "Prompt template for agent execution (required for 'agent' type)",
+          "minLength": 1
+        },
+        "timeout": {
+          "oneOf": [
+            { "type": "number", "minimum": 0 },
+            { "type": "string", "pattern": "^\\d+[smh]?$" }
+          ],
+          "description": "Maximum execution time (e.g., '30s', '5m', '1h', or seconds as number)",
+          "examples": ["30s", "5m", "1h", 300]
+        },
+        "validation": {
+          "type": "array",
+          "description": "List of validation checks to perform after stage execution",
+          "items": {
+            "$ref": "#/definitions/validation"
+          }
+        },
+        "on_success": {
+          "type": "string",
+          "description": "Stage ID to transition to on successful completion",
+          "minLength": 1
+        },
+        "on_failure": {
+          "type": "string",
+          "description": "Stage ID to transition to on failure",
+          "minLength": 1
+        },
+        "max_retries": {
+          "type": "integer",
+          "description": "Maximum number of retry attempts for this stage",
+          "minimum": 0,
+          "default": 0
+        }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Type of validation to perform",
+          "enum": ["output_contains", "file_exists", "file_contains", "compile", "tests"]
+        },
+        "pattern": {
+          "type": "string",
+          "description": "Regex pattern to match (required for output_contains, file_contains)",
+          "minLength": 1
+        },
+        "path": {
+          "type": "string",
+          "description": "File path to check (required for file_exists, file_contains)",
+          "minLength": 1
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "type": { "enum": ["output_contains", "file_contains"] } }
+          },
+          "then": {
+            "required": ["pattern"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "enum": ["file_exists", "file_contains"] } }
+          },
+          "then": {
+            "required": ["path"]
+          }
+        }
+      ]
+    },
+    "transition": {
+      "type": "object",
+      "required": ["from", "to"],
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "type": "string",
+          "description": "Source stage ID",
+          "minLength": 1
+        },
+        "to": {
+          "type": "string",
+          "description": "Target stage ID",
+          "minLength": 1
+        },
+        "condition": {
+          "type": "string",
+          "description": "Condition for transition",
+          "enum": ["success", "failure", "timeout"],
+          "default": "success"
+        }
+      }
+    }
+  }
+}
