@@ -73,6 +73,24 @@ defmodule Babysitter.LangGraph.ClientTest do
                ]
            }}
 
+        String.contains?(url, "/thread-interrupt/runs/run-interrupt") &&
+          env.method == :get &&
+            String.contains?(url, "/status") ->
+          {:ok,
+           %Tesla.Env{
+             env
+             | status: 200,
+               body: %{"run_id" => "run-interrupt", "status" => "interrupted"}
+           }}
+
+        String.contains?(url, "/thread-resume/runs/run-resume") && env.method == :post ->
+          {:ok,
+           %Tesla.Env{
+             env
+             | status: 200,
+               body: %{"run_id" => "run-resume", "status" => "running"}
+           }}
+
         String.contains?(url, "/thread-test") && env.method == :get &&
           not String.contains?(url, "/state") && not String.contains?(url, "/runs") ->
           {:ok,
@@ -201,6 +219,60 @@ defmodule Babysitter.LangGraph.ClientTest do
       assert response.status == 200
       assert is_list(response.body)
       assert length(response.body) == 2
+    end
+  end
+
+  describe "resume_run/3" do
+    test "resumes a run with :approve command" do
+      client = mock_client()
+
+      {:ok, response} =
+        Tesla.post(client, "/threads/thread-resume/runs/run-resume", %{
+          command: %{resume: "approved"}
+        })
+
+      assert response.status == 200
+      assert response.body["status"] == "running"
+    end
+
+    test "resumes a run with :reject command" do
+      client = mock_client()
+
+      {:ok, response} =
+        Tesla.post(client, "/threads/thread-resume/runs/run-resume", %{
+          command: %{resume: "rejected"}
+        })
+
+      assert response.status == 200
+    end
+
+    test "resumes a run with {:resume, value} command" do
+      client = mock_client()
+
+      {:ok, response} =
+        Tesla.post(client, "/threads/thread-resume/runs/run-resume", %{
+          command: %{resume: %{"action" => "continue"}}
+        })
+
+      assert response.status == 200
+    end
+  end
+
+  describe "interrupted?/2" do
+    test "returns true when run is interrupted" do
+      client = mock_client()
+      {:ok, response} = Tesla.get(client, "/threads/thread-interrupt/runs/run-interrupt/status")
+
+      assert response.status == 200
+      assert response.body["status"] == "interrupted"
+    end
+
+    test "returns false when run is not interrupted" do
+      client = mock_client()
+      {:ok, response} = Tesla.get(client, "/threads/thread-test/runs/run-test/status")
+
+      assert response.status == 200
+      assert response.body["status"] != "interrupted"
     end
   end
 

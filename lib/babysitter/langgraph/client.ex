@@ -148,6 +148,58 @@ defmodule Babysitter.LangGraph.Client do
   end
 
   @doc """
+  Resume an interrupted run.
+
+  Returns `{:ok, response}` on success or `{:error, reason}` on failure.
+
+  ## Command Types
+
+      * `{:resume, value}` - Resume with a specific value
+      * `:approve` - Approve and continue the run
+      * `:reject` - Reject and stop the run
+
+  ## Examples
+
+      # Resume with a value
+      Client.resume_run("thread-123", "run-456", {:resume, %{"action" => "continue"}})
+
+      # Approve and continue
+      Client.resume_run("thread-123", "run-456", :approve)
+
+      # Reject and stop
+      Client.resume_run("thread-123", "run-456", :reject)
+
+  """
+  @spec resume_run(String.t(), String.t(), {:resume, term()} | :approve | :reject) ::
+          {:ok, Tesla.Env.t()} | {:error, term()}
+  def resume_run(thread_id, run_id, command)
+      when is_binary(thread_id) and is_binary(run_id) do
+    body = build_resume_command(command)
+
+    with_retry(fn -> post("/threads/#{thread_id}/runs/#{run_id}", body) end)
+  end
+
+  @doc """
+  Check if a run is in interrupted state.
+
+  Returns `{:ok, true}` if the run is interrupted, `{:ok, false}` if not,
+  or `{:error, reason}` on failure.
+  """
+  @spec interrupted?(String.t(), String.t()) :: {:ok, boolean()} | {:error, term()}
+  def interrupted?(thread_id, run_id)
+      when is_binary(thread_id) and is_binary(run_id) do
+    case get_run_status(thread_id, run_id) do
+      {:ok, %Tesla.Env{body: %{"status" => "interrupted"}}} -> {:ok, true}
+      {:ok, %Tesla.Env{}} -> {:ok, false}
+      error -> error
+    end
+  end
+
+  defp build_resume_command(:approve), do: %{command: %{resume: "approved"}}
+  defp build_resume_command(:reject), do: %{command: %{resume: "rejected"}}
+  defp build_resume_command({:resume, value}), do: %{command: %{resume: value}}
+
+  @doc """
   Execute a function with retry logic using exponential backoff.
 
   Retries up to max_retries times with exponential delay between attempts.

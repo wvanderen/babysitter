@@ -43,10 +43,10 @@ So that Elixir can manage workflow threads and runs.
   - [x] 1.4: Add `list_runs/1` to list all runs for a thread
   - [x] 1.5: Update `create_run/2` to support all LangGraph options (stream_mode, etc.)
 
-- [ ] Task 2: Implement interrupt/resume functions (AC: #3) [td:td-50b572]
-  - [ ] 2.1: Add `resume_run/3` with resume value support
-  - [ ] 2.2: Add support for different command types (resume, approve, reject)
-  - [ ] 2.3: Handle interrupted state detection in `get_run_status/2`
+- [x] Task 2: Implement interrupt/resume functions (AC: #3) [td:td-50b572]
+  - [x] 2.1: Add `resume_run/3` with resume value support
+  - [x] 2.2: Add support for different command types (resume, approve, reject)
+  - [x] 2.3: Handle interrupted state detection in `get_run_status/2`
 
 - [ ] Task 3: Add comprehensive tests (AC: #1, #2, #3, #4) [td:td-6c2d16]
   - [ ] 3.1: Add unit tests for new functions
@@ -170,7 +170,7 @@ Or with value:
 | Task | td Issue | Status |
 |------|----------|--------|
 | Task 1: Implement run lifecycle functions | `td-289b2c` | in_review |
-| Task 2: Implement interrupt/resume functions | `td-50b572` | open |
+| Task 2: Implement interrupt/resume functions | `td-50b572` | in_review |
 | Task 3: Add comprehensive tests | `td-6c2d16` | open |
 | Task 4: Update documentation | `td-18aa0c` | open |
 
@@ -179,9 +179,9 @@ Or with value:
 ## File List
 
 | File | Change |
-|------|--------|
-| `lib/babysitter/langgraph/client.ex` | Added get_run/2, get_run_status/2, cancel_run/2, list_runs/1, updated create_run/2 |
-| `test/langgraph/client_test.exs` | Added tests for new run lifecycle functions |
+| |------|--------|
+| `lib/babysitter/langgraph/client.ex` | Added get_run/2, get_run_status/2, cancel_run/2, list_runs/1, updated create_run/2, resume_run/3, interrupted?/2 |
+| `test/langgraph/client_test.exs` | Added tests for run lifecycle functions and interrupt/resume functions |
 
 ---
 
@@ -199,6 +199,14 @@ Or with value:
 - Added typespecs for all public functions
 - Added unit tests with mock Tesla adapter
 
+**Task 2: Interrupt/Resume Functions (2026-02-27)**
+- Implemented `resume_run/3` - resume interrupted runs with command types
+- Added command type support: `{:resume, value}`, `:approve`, `:reject`
+- Implemented `interrupted?/2` - check if run is in interrupted state
+- Uses existing `with_retry/2` for error handling
+- Added typespecs and @doc for all new functions
+- Added unit tests for all command types and interrupted state detection
+
 ---
 
 ## td Sync Log
@@ -208,3 +216,4 @@ Or with value:
 | 2026-02-27T10:00:00Z | story-created | Story 1.8 created with td epic td-4c2869 |
 | 2026-02-27T10:00:00Z | tasks-created | Created 4 td issues under epic td-4c2869 |
 | 2026-02-27T09:52:00Z | task-complete | td-289b2c: Task 1: Implement run lifecycle functions |
+| 2026-02-27T09:56:00Z | task-complete | td-50b572: Task 2: Implement interrupt/resume functions |
