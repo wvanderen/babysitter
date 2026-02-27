@@ -37,6 +37,42 @@ defmodule Babysitter.LangGraph.ClientTest do
         String.contains?(url, "/thread-test/state") && env.method == :get ->
           {:ok, %Tesla.Env{env | status: 200, body: %{"values" => %{}}}}
 
+        String.contains?(url, "/thread-test/runs/run-test") && env.method == :get &&
+            String.contains?(url, "/status") ->
+          {:ok,
+           %Tesla.Env{
+             env
+             | status: 200,
+               body: %{"run_id" => "run-test", "status" => "running"}
+           }}
+
+        String.contains?(url, "/thread-test/runs/run-test") && env.method == :get &&
+            not String.contains?(url, "/status") ->
+          {:ok,
+           %Tesla.Env{
+             env
+             | status: 200,
+               body: %{
+                 "run_id" => "run-test",
+                 "thread_id" => "thread-test",
+                 "status" => "pending"
+               }
+           }}
+
+        String.contains?(url, "/thread-test/runs/run-test") && env.method == :delete ->
+          {:ok, %Tesla.Env{env | status: 200, body: %{"status" => "cancelled"}}}
+
+        String.contains?(url, "/thread-test/runs") && env.method == :get ->
+          {:ok,
+           %Tesla.Env{
+             env
+             | status: 200,
+               body: [
+                 %{"run_id" => "run-1", "status" => "completed"},
+                 %{"run_id" => "run-2", "status" => "running"}
+               ]
+           }}
+
         String.contains?(url, "/thread-test") && env.method == :get &&
           not String.contains?(url, "/state") && not String.contains?(url, "/runs") ->
           {:ok,
@@ -123,6 +159,48 @@ defmodule Babysitter.LangGraph.ClientTest do
 
       assert response.status == 200
       assert response.body["values"] != nil
+    end
+  end
+
+  describe "get_run/2" do
+    test "gets run details" do
+      client = mock_client()
+      {:ok, response} = Tesla.get(client, "/threads/thread-test/runs/run-test")
+
+      assert response.status == 200
+      assert response.body["run_id"] == "run-test"
+      assert response.body["thread_id"] == "thread-test"
+    end
+  end
+
+  describe "get_run_status/2" do
+    test "gets run status" do
+      client = mock_client()
+      {:ok, response} = Tesla.get(client, "/threads/thread-test/runs/run-test/status")
+
+      assert response.status == 200
+      assert response.body["status"] == "running"
+    end
+  end
+
+  describe "cancel_run/2" do
+    test "cancels a run" do
+      client = mock_client()
+      {:ok, response} = Tesla.delete(client, "/threads/thread-test/runs/run-test")
+
+      assert response.status == 200
+      assert response.body["status"] == "cancelled"
+    end
+  end
+
+  describe "list_runs/1" do
+    test "lists all runs for a thread" do
+      client = mock_client()
+      {:ok, response} = Tesla.get(client, "/threads/thread-test/runs")
+
+      assert response.status == 200
+      assert is_list(response.body)
+      assert length(response.body) == 2
     end
   end
 

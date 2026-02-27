@@ -59,7 +59,14 @@ defmodule Babysitter.LangGraph.Client do
 
   Returns `{:ok, response}` with run_id on success or `{:error, reason}` on failure.
 
-  The `assistant_id` is required by LangGraph API. Defaults to "agent".
+  ## Options
+
+    * `:assistant_id` - The assistant to use (default: "agent")
+    * `:input` - Input payload for the run (default: %{})
+    * `:stream_mode` - Streaming mode ("values", "messages", etc.)
+    * `:config` - LangGraph configuration map
+    * `:webhook` - Webhook URL for run completion
+
   """
   @spec create_run(String.t(), keyword() | map()) :: {:ok, Tesla.Env.t()} | {:error, term()}
   def create_run(thread_id, opts \\ [])
@@ -67,9 +74,18 @@ defmodule Babysitter.LangGraph.Client do
   def create_run(thread_id, opts) when is_binary(thread_id) and is_list(opts) do
     assistant_id = Keyword.get(opts, :assistant_id, "agent")
     input = Keyword.get(opts, :input, %{})
+    stream_mode = Keyword.get(opts, :stream_mode)
+    config = Keyword.get(opts, :config)
+    webhook = Keyword.get(opts, :webhook)
+
+    body =
+      %{assistant_id: assistant_id, input: input}
+      |> maybe_add(:stream_mode, stream_mode)
+      |> maybe_add(:config, config)
+      |> maybe_add(:webhook, webhook)
 
     with_retry(fn ->
-      post("/threads/#{thread_id}/runs", %{assistant_id: assistant_id, input: input})
+      post("/threads/#{thread_id}/runs", body)
     end)
   end
 
@@ -77,6 +93,48 @@ defmodule Babysitter.LangGraph.Client do
     with_retry(fn ->
       post("/threads/#{thread_id}/runs", %{assistant_id: "agent", input: input})
     end)
+  end
+
+  @doc """
+  Get details of a specific run.
+
+  Returns `{:ok, response}` with run details on success or `{:error, reason}` on failure.
+  """
+  @spec get_run(String.t(), String.t()) :: {:ok, Tesla.Env.t()} | {:error, term()}
+  def get_run(thread_id, run_id) when is_binary(thread_id) and is_binary(run_id) do
+    with_retry(fn -> get("/threads/#{thread_id}/runs/#{run_id}") end)
+  end
+
+  @doc """
+  Get the status of a run.
+
+  Returns `{:ok, response}` with run status on success or `{:error, reason}` on failure.
+
+  Possible statuses: pending, running, interrupted, completed, error, cancelled
+  """
+  @spec get_run_status(String.t(), String.t()) :: {:ok, Tesla.Env.t()} | {:error, term()}
+  def get_run_status(thread_id, run_id) when is_binary(thread_id) and is_binary(run_id) do
+    with_retry(fn -> get("/threads/#{thread_id}/runs/#{run_id}/status") end)
+  end
+
+  @doc """
+  Cancel a running run.
+
+  Returns `{:ok, response}` on success or `{:error, reason}` on failure.
+  """
+  @spec cancel_run(String.t(), String.t()) :: {:ok, Tesla.Env.t()} | {:error, term()}
+  def cancel_run(thread_id, run_id) when is_binary(thread_id) and is_binary(run_id) do
+    with_retry(fn -> delete("/threads/#{thread_id}/runs/#{run_id}") end)
+  end
+
+  @doc """
+  List all runs for a thread.
+
+  Returns `{:ok, response}` with list of runs on success or `{:error, reason}` on failure.
+  """
+  @spec list_runs(String.t()) :: {:ok, Tesla.Env.t()} | {:error, term()}
+  def list_runs(thread_id) when is_binary(thread_id) do
+    with_retry(fn -> get("/threads/#{thread_id}/runs") end)
   end
 
   @doc """
@@ -127,4 +185,7 @@ defmodule Babysitter.LangGraph.Client do
       _ -> false
     end
   end
+
+  defp maybe_add(map, _key, nil), do: map
+  defp maybe_add(map, key, value), do: Map.put(map, key, value)
 end
