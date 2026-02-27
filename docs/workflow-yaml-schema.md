@@ -248,6 +248,169 @@ Timeouts and durations can be specified as:
 | Hours | `1h` | 1 hour |
 | Infinite | `infinity` | No timeout |
 
+## Example Workflows
+
+The `.babysitter/workflows/` directory contains ready-to-use example workflows:
+
+### default.yaml
+
+A comprehensive workflow demonstrating all schema features:
+
+```yaml
+id: default
+name: Default Development Workflow
+intelligence: hybrid
+
+variables:
+  project_root: .
+  test_timeout: 5m
+
+stages:
+  - id: analyze
+    type: agent
+    agent: claude
+    prompt: Analyze the codebase and understand the task requirements
+    timeout: 10m
+    on_success: implement
+
+  - id: implement
+    type: agent
+    agent: claude
+    prompt: Implement the required changes with tests
+    timeout: 30m
+    validation:
+      - type: compile
+      - type: tests
+    on_success: review
+    on_failure: fix
+    max_retries: 2
+
+  - id: fix
+    type: decision
+    prompt: Analyze failures and determine fix strategy
+    on_success: implement
+
+  - id: review
+    type: agent
+    agent: claude
+    prompt: Review implementation for quality and completeness
+    timeout: 10m
+    on_success: complete
+
+  - id: complete
+    type: action
+    action: td_review
+    message: Implementation complete
+```
+
+### bugfix.yaml
+
+A workflow optimized for bug fixes with reproduction and verification:
+
+```yaml
+id: bugfix
+name: Bug Fix Workflow
+intelligence: smart
+
+stages:
+  - id: triage
+    type: agent
+    agent: claude
+    prompt: Analyze the bug report and identify root cause
+    timeout: 15m
+    on_success: reproduce
+
+  - id: reproduce
+    type: agent
+    agent: claude
+    prompt: Create a test case that reproduces the bug
+    timeout: 10m
+    validation:
+      - type: tests
+    on_success: fix
+    on_failure: triage
+
+  - id: fix
+    type: agent
+    agent: claude
+    prompt: Fix the bug ensuring the reproduction test passes
+    timeout: 20m
+    validation:
+      - type: compile
+      - type: tests
+    on_success: verify
+    on_failure: triage
+    max_retries: 2
+
+  - id: verify
+    type: validation
+    validation:
+      - type: tests
+    on_success: complete
+    on_failure: fix
+
+  - id: complete
+    type: action
+    action: td_review
+    message: Bug fix complete and verified
+```
+
+### feature.yaml
+
+A workflow for feature development with planning and integration:
+
+```yaml
+id: feature
+name: Feature Development Workflow
+intelligence: hybrid
+
+stages:
+  - id: plan
+    type: agent
+    agent: claude
+    prompt: Plan the feature implementation with acceptance criteria
+    timeout: 15m
+    on_success: implement
+
+  - id: implement
+    type: agent
+    agent: claude
+    prompt: Implement the feature with comprehensive tests
+    timeout: 45m
+    validation:
+      - type: compile
+      - type: tests
+    on_success: integrate
+    on_failure: debug
+    max_retries: 3
+
+  - id: debug
+    type: decision
+    prompt: Analyze issues and determine resolution
+    on_success: implement
+
+  - id: integrate
+    type: agent
+    agent: claude
+    prompt: Ensure feature integrates well with existing code
+    timeout: 15m
+    validation:
+      - type: tests
+    on_success: review
+
+  - id: review
+    type: agent
+    agent: claude
+    prompt: Review for code quality, edge cases, and documentation
+    timeout: 10m
+    on_success: complete
+
+  - id: complete
+    type: action
+    action: td_review
+    message: Feature implementation complete
+```
+
 ## Complete Example
 
 ```yaml

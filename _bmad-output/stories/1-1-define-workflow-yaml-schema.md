@@ -7,7 +7,7 @@ Status: ready-for-dev
 ## td Integration
 
 - **td Epic**: `td-0176be`
-- **td Tasks**: 4 issues (1 open, 0 in-progress, 0 blocked, 3 completed/in_review)
+- **td Tasks**: 4 issues (0 open, 0 in-progress, 0 blocked, 4 completed/in_review)
 - **Last Sync**: 2026-02-27
 - **Sync Status**: active
 
@@ -15,7 +15,7 @@ Status: ready-for-dev
 
 | Task | td Issue | Status |
 |------|----------|--------|
-| Task 1 | `td-ea10aa` | open |
+| Task 1 | `td-ea10aa` | in_review |
 | Task 2 | `td-8fe0ae` | in_review |
 | Task 3 | `td-0d89bf` | in_review |
 | Task 4 | `td-f72b73` | in_review |
@@ -44,11 +44,11 @@ so that I know the correct structure for stages, transitions, and configuration.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create workflow schema documentation (AC: #1, #2) [td:td-ea10aa]
-  - [ ] Document top-level fields: id, name, stages[], transitions, intelligence
-  - [ ] Document stage fields: id, type, agent, prompt, timeout, validation[], on_success, on_failure
-  - [ ] Document transition syntax and stage references
-  - [ ] Add examples for common workflow patterns (default, bugfix, feature)
+- [x] Task 1: Create workflow schema documentation (AC: #1, #2) [td:td-ea10aa]
+  - [x] Document top-level fields: id, name, stages[], transitions, intelligence
+  - [x] Document stage fields: id, type, agent, prompt, timeout, validation[], on_success, on_failure
+  - [x] Document transition syntax and stage references
+  - [x] Add examples for common workflow patterns (default, bugfix, feature)
 
 - [x] Task 2: Create JSON Schema for YAML validation (AC: #3) [td:td-8fe0ae]
   - [x] Define JSON Schema for workflow structure
@@ -135,6 +135,12 @@ N/A
 
 ### Completion Notes List
 
+**Task 1: Create workflow schema documentation**
+- Enhanced `docs/workflow-yaml-schema.md` with "Example Workflows" section
+- Added complete examples for default.yaml, bugfix.yaml, and feature.yaml patterns
+- Examples demonstrate all schema features: stages, transitions, validation, intelligence levels
+- Links workflow examples to actual files in `.babysitter/workflows/`
+
 **Task 3: Add example workflow files**
 - Created `default.yaml` - Comprehensive workflow demonstrating all schema features including variables, all stage types (action, agent, decision), validation types (output_contains, file_exists, file_contains, compile, tests), timeouts, max_retries, on_success/on_failure handlers, and transitions
 - Created `bugfix.yaml` - Bug fix workflow with triage, reproduce, diagnose, fix, and verify stages demonstrating smart intelligence level and error handling
@@ -168,6 +174,7 @@ N/A
 - `.babysitter/workflows/feature.yaml` (new)
 - `.babysitter/schemas/workflow.schema.json` (new)
 - `docs/workflow-guide.md` (new)
+- `docs/workflow-yaml-schema.md` (modified - added example workflows section)
 
 ---
 
@@ -179,3 +186,4 @@ N/A
 | 2026-02-27T12:32 | task-complete | td-0d89bf: Add example workflow files |
 | 2026-02-27T12:40 | task-complete | td-8fe0ae: Create JSON Schema for YAML validation |
 | 2026-02-27T12:55 | task-complete | td-f72b73: Add documentation to docs/ |
+| 2026-02-27T14:20 | task-complete | td-ea10aa: Create workflow schema documentation |
