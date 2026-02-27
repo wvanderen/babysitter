@@ -362,6 +362,31 @@ defmodule Babysitter.LangGraph.ClientTest do
       assert response.status == 404
       assert response.body["error"] == "not found"
     end
+
+    test "resume_run returns error for invalid command type" do
+      result = Client.resume_run("thread-test", "run-test", :invalid_command)
+      assert result == {:error, :invalid_command}
+    end
+
+    test "get_thread returns error for path traversal in thread_id" do
+      result = Client.get_thread("../other-thread")
+      assert result == {:error, :invalid_thread_id}
+    end
+
+    test "get_thread returns error for null byte in thread_id" do
+      result = Client.get_thread("thread\x0malicious")
+      assert result == {:error, :invalid_thread_id}
+    end
+
+    test "get_run returns error for invalid run_id" do
+      result = Client.get_run("thread-test", "../run")
+      assert result == {:error, :invalid_run_id}
+    end
+
+    test "list_runs returns error for path traversal" do
+      result = Client.list_runs("thread/../../../etc")
+      assert result == {:error, :invalid_thread_id}
+    end
   end
 
   describe "create_run/2 with options" do
@@ -473,6 +498,7 @@ defmodule Babysitter.LangGraph.ClientIntegrationTest do
 
   setup do
     unless Client.healthy?() do
+      IO.puts("\n  ⚠ LangGraph service unavailable - skipping integration tests")
       {:ok, skip: true}
     else
       {:ok, skip: false}

@@ -138,7 +138,8 @@ defmodule Babysitter.LangGraph.Client do
   """
   @spec get_thread(String.t()) :: {:ok, Tesla.Env.t()} | {:error, term()}
   def get_thread(thread_id) when is_binary(thread_id) do
-    with_retry(fn -> get("/threads/#{thread_id}") end)
+    with :ok <- validate_thread_id(thread_id),
+         do: with_retry(fn -> get("/threads/#{thread_id}") end)
   end
 
   @doc """
@@ -159,27 +160,31 @@ defmodule Babysitter.LangGraph.Client do
   def create_run(thread_id, opts \\ [])
 
   def create_run(thread_id, opts) when is_binary(thread_id) and is_list(opts) do
-    assistant_id = Keyword.get(opts, :assistant_id, "agent")
-    input = Keyword.get(opts, :input, %{})
-    stream_mode = Keyword.get(opts, :stream_mode)
-    config = Keyword.get(opts, :config)
-    webhook = Keyword.get(opts, :webhook)
+    with :ok <- validate_thread_id(thread_id) do
+      assistant_id = Keyword.get(opts, :assistant_id, "agent")
+      input = Keyword.get(opts, :input, %{})
+      stream_mode = Keyword.get(opts, :stream_mode)
+      config = Keyword.get(opts, :config)
+      webhook = Keyword.get(opts, :webhook)
 
-    body =
-      %{assistant_id: assistant_id, input: input}
-      |> maybe_add(:stream_mode, stream_mode)
-      |> maybe_add(:config, config)
-      |> maybe_add(:webhook, webhook)
+      body =
+        %{assistant_id: assistant_id, input: input}
+        |> maybe_add(:stream_mode, stream_mode)
+        |> maybe_add(:config, config)
+        |> maybe_add(:webhook, webhook)
 
-    with_retry(fn ->
-      post("/threads/#{thread_id}/runs", body)
-    end)
+      with_retry(fn ->
+        post("/threads/#{thread_id}/runs", body)
+      end)
+    end
   end
 
   def create_run(thread_id, input) when is_binary(thread_id) and is_map(input) do
-    with_retry(fn ->
-      post("/threads/#{thread_id}/runs", %{assistant_id: "agent", input: input})
-    end)
+    with :ok <- validate_thread_id(thread_id),
+         do:
+           with_retry(fn ->
+             post("/threads/#{thread_id}/runs", %{assistant_id: "agent", input: input})
+           end)
   end
 
   @doc """
@@ -189,7 +194,9 @@ defmodule Babysitter.LangGraph.Client do
   """
   @spec get_run(String.t(), String.t()) :: {:ok, Tesla.Env.t()} | {:error, term()}
   def get_run(thread_id, run_id) when is_binary(thread_id) and is_binary(run_id) do
-    with_retry(fn -> get("/threads/#{thread_id}/runs/#{run_id}") end)
+    with :ok <- validate_thread_id(thread_id),
+         :ok <- validate_run_id(run_id),
+         do: with_retry(fn -> get("/threads/#{thread_id}/runs/#{run_id}") end)
   end
 
   @doc """
@@ -201,7 +208,9 @@ defmodule Babysitter.LangGraph.Client do
   """
   @spec get_run_status(String.t(), String.t()) :: {:ok, Tesla.Env.t()} | {:error, term()}
   def get_run_status(thread_id, run_id) when is_binary(thread_id) and is_binary(run_id) do
-    with_retry(fn -> get("/threads/#{thread_id}/runs/#{run_id}/status") end)
+    with :ok <- validate_thread_id(thread_id),
+         :ok <- validate_run_id(run_id),
+         do: with_retry(fn -> get("/threads/#{thread_id}/runs/#{run_id}/status") end)
   end
 
   @doc """
@@ -211,7 +220,9 @@ defmodule Babysitter.LangGraph.Client do
   """
   @spec cancel_run(String.t(), String.t()) :: {:ok, Tesla.Env.t()} | {:error, term()}
   def cancel_run(thread_id, run_id) when is_binary(thread_id) and is_binary(run_id) do
-    with_retry(fn -> delete("/threads/#{thread_id}/runs/#{run_id}") end)
+    with :ok <- validate_thread_id(thread_id),
+         :ok <- validate_run_id(run_id),
+         do: with_retry(fn -> delete("/threads/#{thread_id}/runs/#{run_id}") end)
   end
 
   @doc """
@@ -221,7 +232,8 @@ defmodule Babysitter.LangGraph.Client do
   """
   @spec list_runs(String.t()) :: {:ok, Tesla.Env.t()} | {:error, term()}
   def list_runs(thread_id) when is_binary(thread_id) do
-    with_retry(fn -> get("/threads/#{thread_id}/runs") end)
+    with :ok <- validate_thread_id(thread_id),
+         do: with_retry(fn -> get("/threads/#{thread_id}/runs") end)
   end
 
   @doc """
@@ -231,7 +243,8 @@ defmodule Babysitter.LangGraph.Client do
   """
   @spec get_state(String.t()) :: {:ok, Tesla.Env.t()} | {:error, term()}
   def get_state(thread_id) when is_binary(thread_id) do
-    with_retry(fn -> get("/threads/#{thread_id}/state") end)
+    with :ok <- validate_thread_id(thread_id),
+         do: with_retry(fn -> get("/threads/#{thread_id}/state") end)
   end
 
   @doc """
@@ -261,9 +274,13 @@ defmodule Babysitter.LangGraph.Client do
           {:ok, Tesla.Env.t()} | {:error, term()}
   def resume_run(thread_id, run_id, command)
       when is_binary(thread_id) and is_binary(run_id) do
-    body = build_resume_command(command)
-
-    with_retry(fn -> post("/threads/#{thread_id}/runs/#{run_id}", body) end)
+    with :ok <- validate_thread_id(thread_id),
+         :ok <- validate_run_id(run_id) do
+      case build_resume_command(command) do
+        {:error, _} = error -> error
+        body -> with_retry(fn -> post("/threads/#{thread_id}/runs/#{run_id}", body) end)
+      end
+    end
   end
 
   @doc """
@@ -276,8 +293,8 @@ defmodule Babysitter.LangGraph.Client do
   def interrupted?(thread_id, run_id)
       when is_binary(thread_id) and is_binary(run_id) do
     case get_run_status(thread_id, run_id) do
-      {:ok, %Tesla.Env{body: %{"status" => "interrupted"}}} -> {:ok, true}
-      {:ok, %Tesla.Env{}} -> {:ok, false}
+      {:ok, %Tesla.Env{body: %{"status" => status}}} -> {:ok, status == "interrupted"}
+      {:ok, %Tesla.Env{body: _}} -> {:ok, false}
       error -> error
     end
   end
@@ -285,6 +302,7 @@ defmodule Babysitter.LangGraph.Client do
   defp build_resume_command(:approve), do: %{command: %{resume: "approved"}}
   defp build_resume_command(:reject), do: %{command: %{resume: "rejected"}}
   defp build_resume_command({:resume, value}), do: %{command: %{resume: value}}
+  defp build_resume_command(_invalid), do: {:error, :invalid_command}
 
   @doc """
   Execute a function with retry logic using exponential backoff.
@@ -327,4 +345,18 @@ defmodule Babysitter.LangGraph.Client do
 
   defp maybe_add(map, _key, nil), do: map
   defp maybe_add(map, key, value), do: Map.put(map, key, value)
+
+  defp valid_id?(id) when is_binary(id) do
+    not String.contains?(id, ["/", "\\", "..", "\0"])
+  end
+
+  defp valid_id?(_), do: false
+
+  defp validate_thread_id(thread_id) do
+    if valid_id?(thread_id), do: :ok, else: {:error, :invalid_thread_id}
+  end
+
+  defp validate_run_id(run_id) do
+    if valid_id?(run_id), do: :ok, else: {:error, :invalid_run_id}
+  end
 end
