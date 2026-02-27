@@ -63,10 +63,10 @@ So that smart intervention and workflow intelligence are available.
   - [x] 3.4: Configure health check with `/info` endpoint
   - [x] 3.5: Add volume mount for checkpoint data
 
-- [ ] Task 4: Verify health endpoint (AC: #4) [td:td-124275]
-  - [ ] 4.1: Start LangGraph service via docker-compose
-  - [ ] 4.2: Test `GET /info` returns 200
-  - [ ] 4.3: Verify service responds to API requests
+- [x] Task 4: Verify health endpoint (AC: #4) [td:td-124275]
+  - [x] 4.1: Start LangGraph service via docker-compose
+  - [x] 4.2: Test `GET /info` returns 200
+  - [x] 4.3: Verify service responds to API requests
 
 - [ ] Task 5: Verify Elixir connectivity (AC: #5) [td:td-64fe67]
   - [ ] 5.1: Create basic `Babysitter.LangGraphClient` module
@@ -195,7 +195,7 @@ end
 | Task 1: Create LangGraph project structure | `td-f91b22` | in_review |
 | Task 2: Create configuration files | `td-654dbb` | in_review |
 | Task 3: Add Docker service | `td-8ed104` | in_review |
-| Task 4: Verify health endpoint | `td-124275` | open |
+| Task 4: Verify health endpoint | `td-124275` | in_review |
 | Task 5: Verify Elixir connectivity | `td-64fe67` | open |
 
 ---
@@ -209,6 +209,7 @@ end
 | 2026-02-26T20:59:00Z | task-complete | td-f91b22: Create LangGraph project structure |
 | 2026-02-26T21:40:00Z | task-complete | td-654dbb: Create configuration files |
 | 2026-02-26T22:15:00Z | task-complete | td-8ed104: Add Docker service |
+| 2026-02-27T04:02:00Z | task-complete | td-124275: Verify health endpoint |
 
 ## Dev Agent Record
 
@@ -257,3 +258,19 @@ end
 - Bound to 127.0.0.1 only for security (no external access)
 - Added `restart: unless-stopped` for production resilience
 - Copied .env.example to .env for local development
+
+### Task 4 Completion Notes
+
+**Implemented:**
+- Added `langgraph-cli[inmem]` to requirements.txt and pyproject.toml (required for `langgraph dev` command)
+- Built and started LangGraph service via docker-compose
+- Verified `GET /info` returns 200 with version info
+- Verified `POST /threads` API endpoint works (thread creation)
+
+**Key Decisions:**
+- Used `langgraph-cli[inmem]` extra to get the in-memory runtime for local development
+- The `[inmem]` extra installs `langgraph-api` and `langgraph-runtime-inmem` packages
+
+**Tests:**
+- Manual verification: `curl http://127.0.0.1:8123/info` returns 200
+- Manual verification: `curl -X POST http://127.0.0.1:8123/threads` creates thread
