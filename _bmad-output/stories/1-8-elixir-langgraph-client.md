@@ -48,11 +48,11 @@ So that Elixir can manage workflow threads and runs.
   - [x] 2.2: Add support for different command types (resume, approve, reject)
   - [x] 2.3: Handle interrupted state detection in `get_run_status/2`
 
-- [ ] Task 3: Add comprehensive tests (AC: #1, #2, #3, #4) [td:td-6c2d16]
-  - [ ] 3.1: Add unit tests for new functions
-  - [ ] 3.2: Add integration tests against running LangGraph service
-  - [ ] 3.3: Add retry logic tests for error scenarios
-  - [ ] 3.4: Add tests for all command types (resume, approve, reject)
+- [x] Task 3: Add comprehensive tests (AC: #1, #2, #3, #4) [td:td-6c2d16]
+  - [x] 3.1: Add unit tests for new functions
+  - [x] 3.2: Add integration tests against running LangGraph service
+  - [x] 3.3: Add retry logic tests for error scenarios
+  - [x] 3.4: Add tests for all command types (resume, approve, reject)
 
 - [ ] Task 4: Update documentation (AC: #1, #2, #3, #4) [td:td-18aa0c]
   - [ ] 4.1: Add @moduledoc with usage examples
@@ -171,7 +171,7 @@ Or with value:
 |------|----------|--------|
 | Task 1: Implement run lifecycle functions | `td-289b2c` | in_review |
 | Task 2: Implement interrupt/resume functions | `td-50b572` | in_review |
-| Task 3: Add comprehensive tests | `td-6c2d16` | open |
+| Task 3: Add comprehensive tests | `td-6c2d16` | in_review |
 | Task 4: Update documentation | `td-18aa0c` | open |
 
 ---
@@ -181,7 +181,7 @@ Or with value:
 | File | Change |
 | |------|--------|
 | `lib/babysitter/langgraph/client.ex` | Added get_run/2, get_run_status/2, cancel_run/2, list_runs/1, updated create_run/2, resume_run/3, interrupted?/2 |
-| `test/langgraph/client_test.exs` | Added tests for run lifecycle functions and interrupt/resume functions |
+| `test/langgraph/client_test.exs` | Added comprehensive unit tests, integration tests, retry tests, and command type tests |
 
 ---
 
@@ -207,6 +207,15 @@ Or with value:
 - Added typespecs and @doc for all new functions
 - Added unit tests for all command types and interrupted state detection
 
+**Task 3: Comprehensive Tests (2026-02-27)**
+- Added unit tests for all new functions: get_run/2, get_run_status/2, cancel_run/2, list_runs/1, resume_run/3, interrupted?/2
+- Added integration tests against running LangGraph service with auto-skip if unavailable
+- Added retry logic tests for different error types (timeout, econnrefused, nxdomain)
+- Added tests for all command types: :approve, :reject, {:resume, value} with complex, string, and list values
+- Added error handling tests for 404 responses
+- Added tests for create_run/2 with optional params (stream_mode, config, webhook)
+- Total: 35 tests (27 unit + 8 integration), all passing
+
 ---
 
 ## td Sync Log
@@ -217,3 +226,4 @@ Or with value:
 | 2026-02-27T10:00:00Z | tasks-created | Created 4 td issues under epic td-4c2869 |
 | 2026-02-27T09:52:00Z | task-complete | td-289b2c: Task 1: Implement run lifecycle functions |
 | 2026-02-27T09:56:00Z | task-complete | td-50b572: Task 2: Implement interrupt/resume functions |
+| 2026-02-27T10:04:00Z | task-complete | td-6c2d16: Task 3: Add comprehensive tests |
