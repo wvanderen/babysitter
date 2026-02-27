@@ -29,7 +29,9 @@ defmodule Babysitter.MixProject do
       {:jason, "~> 1.4"},
       {:plug_cowboy, "~> 2.7"},
       {:ecto_sqlite3, "~> 0.17"},
-      {:yamerl, "~> 0.10"}
+      {:yamerl, "~> 0.10"},
+      {:tesla, "~> 1.13"},
+      {:finch, "~> 0.19"}
     ]
   end
 end
