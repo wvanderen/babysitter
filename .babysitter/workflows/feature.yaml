@@ -1,0 +1,208 @@
+id: feature
+name: Feature Development Workflow
+description: Complete feature development workflow from design to deployment
+intelligence: hybrid
+
+variables:
+  feature_name: ""
+  feature_description: ""
+  target_branch: main
+  pr_required: true
+
+stages:
+  - id: kickoff
+    type: action
+    command: |
+      echo "=== Feature Kickoff ===" && \
+      echo "Feature: {{feature_name}}" && \
+      echo "Description: {{feature_description}}" && \
+      echo "Target branch: {{target_branch}}" && \
+      echo "KICKOFF_COMPLETE"
+    timeout: 30s
+    validation:
+      - type: output_contains
+        pattern: "KICKOFF_COMPLETE"
+    on_success: design
+    on_failure: fail
+
+  - id: design
+    type: agent
+    prompt: |
+      Design the feature: {{feature_name}}
+      
+      Description: {{feature_description}}
+      
+      Create a design document covering:
+      1. Feature overview and goals
+      2. User stories and acceptance criteria
+      3. Technical approach and architecture
+      4. API changes (if any)
+      5. Database schema changes (if any)
+      6. Security considerations
+      7. Performance implications
+      8. Rollout plan
+      
+      Save to /tmp/feature-design.md
+    timeout: 15m
+    validation:
+      - type: file_exists
+        path: /tmp/feature-design.md
+      - type: file_contains
+        path: /tmp/feature-design.md
+        pattern: "Acceptance Criteria"
+    on_success: plan_tasks
+    on_failure: escalate
+
+  - id: plan_tasks
+    type: agent
+    prompt: |
+      Break down the feature into implementation tasks:
+      
+      1. Review the design document at /tmp/feature-design.md
+      2. Identify all components that need to be built
+      3. Create a task list with dependencies
+      4. Estimate effort for each task
+      5. Identify parallel vs sequential work
+      
+      Save task breakdown to /tmp/feature-tasks.md
+    timeout: 10m
+    on_success: implement
+    on_failure: escalate
+
+  - id: implement
+    type: agent
+    prompt: |
+      Implement the feature: {{feature_name}}
+      
+      Follow the task breakdown in /tmp/feature-tasks.md
+      
+      Guidelines:
+      - Write tests first (TDD approach)
+      - Implement incrementally
+      - Run tests after each change
+      - Follow existing code patterns
+      - Add documentation for new modules
+      - Handle error cases gracefully
+      
+      Mark tasks complete as you finish them.
+    timeout: 60m
+    validation:
+      - type: compile
+      - type: tests
+    on_success: integration_test
+    on_failure: retry_implement
+    max_retries: 3
+
+  - id: retry_implement
+    type: decision
+    on_success: implement
+
+  - id: integration_test
+    type: action
+    command: |
+      echo "=== Integration Testing ===" && \
+      echo "Running full test suite..." && \
+      echo "Checking code coverage..." && \
+      echo "INTEGRATION_PASSED"
+    timeout: 15m
+    validation:
+      - type: output_contains
+        pattern: "INTEGRATION_PASSED"
+    on_success: code_review
+    on_failure: fix_integration
+
+  - id: fix_integration
+    type: decision
+    on_success: implement
+
+  - id: code_review
+    type: agent
+    prompt: |
+      Perform a self-review of the implementation:
+      
+      1. Check code follows project conventions
+      2. Verify all acceptance criteria are met
+      3. Review for potential bugs or edge cases
+      4. Check for security issues
+      5. Verify documentation is complete
+      
+      Create review notes at /tmp/feature-review.md
+    timeout: 10m
+    on_success: prepare_pr
+    on_failure: fix_review
+
+  - id: fix_review
+    type: decision
+    on_success: implement
+
+  - id: prepare_pr
+    type: action
+    command: |
+      echo "=== Preparing Pull Request ===" && \
+      echo "Feature: {{feature_name}}" && \
+      echo "Target: {{target_branch}}" && \
+      echo "PR required: {{pr_required}}" && \
+      echo "PR_PREPARED"
+    timeout: 1m
+    validation:
+      - type: output_contains
+        pattern: "PR_PREPARED"
+    on_success: complete
+    on_failure: escalate
+
+  - id: escalate
+    type: action
+    command: |
+      echo "ESCALATION: Feature development blocked" && \
+      echo "Artifacts:" && \
+      ls -la /tmp/feature-*.md 2>/dev/null && \
+      exit 1
+    on_failure: fail
+
+  - id: fail
+    type: action
+    command: "echo 'Feature workflow failed'"
+
+  - id: complete
+    type: action
+    command: |
+      echo "=== Feature Complete ===" && \
+      echo "Feature: {{feature_name}}" && \
+      echo "" && \
+      echo "Artifacts created:" && \
+      echo "  - Design: /tmp/feature-design.md" && \
+      echo "  - Tasks: /tmp/feature-tasks.md" && \
+      echo "  - Review: /tmp/feature-review.md" && \
+      echo "" && \
+      echo "Ready for PR submission to {{target_branch}}"
+
+transitions:
+  - from: kickoff
+    to: design
+    condition: success
+  - from: design
+    to: plan_tasks
+    condition: success
+  - from: plan_tasks
+    to: implement
+    condition: success
+  - from: implement
+    to: integration_test
+    condition: success
+  - from: integration_test
+    to: code_review
+    condition: success
+  - from: integration_test
+    to: fix_integration
+    condition: failure
+  - from: code_review
+    to: prepare_pr
+    condition: success
+  - from: code_review
+    to: fix_review
+    condition: failure
+  - from: prepare_pr
+    to: complete
+    condition: success
+
+entry_point: kickoff

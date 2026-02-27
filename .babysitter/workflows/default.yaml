@@ -1,0 +1,143 @@
+id: default
+name: Default Workflow
+description: Standard development workflow demonstrating all schema features
+intelligence: hybrid
+
+variables:
+  project_root: .
+  test_timeout: 5m
+  build_timeout: 10m
+
+stages:
+  - id: setup
+    type: action
+    command: |
+      echo "=== Setup Stage ===" && \
+      echo "Project root: {{project_root}}" && \
+      echo "Checking prerequisites..."
+    timeout: 30s
+    on_success: validate_environment
+    on_failure: fail
+
+  - id: validate_environment
+    type: action
+    command: |
+      echo "Validating environment..." && \
+      test -f package.json && echo "Found package.json" || echo "No package.json" && \
+      test -f mix.exs && echo "Found mix.exs" || echo "No mix.exs" && \
+      echo "ENV_OK"
+    timeout: 30s
+    validation:
+      - type: output_contains
+        pattern: "ENV_OK"
+    on_success: analyze
+    on_failure: fail
+
+  - id: analyze
+    type: agent
+    prompt: |
+      Analyze the codebase structure and provide:
+      1. Technology stack identification
+      2. Key directories and their purposes
+      3. Entry points and main modules
+      4. Test locations
+      5. Build configuration
+      
+      Output a brief analysis report.
+    timeout: 10m
+    on_success: plan
+    on_failure: retry_analyze
+
+  - id: retry_analyze
+    type: decision
+    on_success: analyze
+
+  - id: plan
+    type: agent
+    prompt: |
+      Based on the analysis, create an implementation plan:
+      1. Identify what needs to be done
+      2. Break down into logical steps
+      3. Estimate effort for each step
+      4. Identify dependencies between steps
+      
+      Output a structured plan.
+    timeout: 5m
+    on_success: implement
+    on_failure: fail
+
+  - id: implement
+    type: agent
+    prompt: |
+      Implement the planned changes:
+      - Follow coding standards in the codebase
+      - Write clean, maintainable code
+      - Add appropriate error handling
+      - Include inline documentation where needed
+      
+      Implement incrementally and test as you go.
+    timeout: 30m
+    validation:
+      - type: compile
+      - type: tests
+    on_success: review
+    on_failure: retry_implement
+    max_retries: 2
+
+  - id: retry_implement
+    type: decision
+    on_success: implement
+
+  - id: review
+    type: action
+    command: |
+      echo "=== Review Stage ===" && \
+      echo "Running linters..." && \
+      echo "Running tests..." && \
+      echo "REVIEW_PASSED"
+    timeout: 10m
+    validation:
+      - type: output_contains
+        pattern: "REVIEW_PASSED"
+    on_success: complete
+    on_failure: escalate
+
+  - id: escalate
+    type: action
+    command: |
+      echo "ESCALATION: Review failed" && \
+      echo "Manual intervention required" && \
+      exit 1
+    on_failure: fail
+
+  - id: fail
+    type: action
+    command: "echo 'Workflow failed'"
+
+  - id: complete
+    type: action
+    command: |
+      echo "=== Workflow Complete ===" && \
+      echo "All stages passed successfully"
+
+transitions:
+  - from: setup
+    to: validate_environment
+    condition: success
+  - from: validate_environment
+    to: analyze
+    condition: success
+  - from: analyze
+    to: plan
+    condition: success
+  - from: plan
+    to: implement
+    condition: success
+  - from: implement
+    to: review
+    condition: success
+  - from: review
+    to: complete
+    condition: success
+
+entry_point: setup
