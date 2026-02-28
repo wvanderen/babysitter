@@ -199,6 +199,32 @@ defmodule Babysitter.Config do
   end
 
   @doc """
+  Get agent completion marker by name.
+
+  Returns the completion_marker configured for the agent, or default marker.
+  """
+  @spec agent_completion_marker(atom()) :: String.t()
+  def agent_completion_marker(name) when is_atom(name) do
+    case agent(name) do
+      nil -> Babysitter.Agent.Prompt.default_marker()
+      config -> Map.get(config, :completion_marker, Babysitter.Agent.Prompt.default_marker())
+    end
+  end
+
+  @doc """
+  Check if agent has native completion.
+
+  Returns true if the agent has native_completion set to true.
+  """
+  @spec agent_native_completion?(atom()) :: boolean()
+  def agent_native_completion?(name) when is_atom(name) do
+    case agent(name) do
+      nil -> false
+      config -> Map.get(config, :native_completion, false)
+    end
+  end
+
+  @doc """
   Get all configured agents.
   """
   @spec agents() :: map()

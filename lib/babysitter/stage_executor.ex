@@ -8,7 +8,7 @@ defmodule Babysitter.StageExecutor do
 
   alias Babysitter.{Session, Stage, Tmux, Validation, TemplateInterpolator}
   alias Babysitter.Validation.{CompileRunner, TestRunner, CommandRunner, Result}
-  alias Babysitter.Agent.Completion
+  alias Babysitter.Agent.{Completion, Prompt}
 
   @type execution_status :: :success | :failure | :timeout
   @type exit_code :: non_neg_integer() | nil
@@ -721,13 +721,15 @@ defmodule Babysitter.StageExecutor do
   end
 
   defp send_agent_prompt(tmux_name, command, :pi) do
-    :ok = Tmux.send_keys(tmux_name, command, enter: false)
+    wrapped = Prompt.wrap_for_agent(command, :pi)
+    :ok = Tmux.send_keys(tmux_name, wrapped, enter: false)
     Process.sleep(100)
     :ok = Tmux.send_keys(tmux_name, "Enter", enter: false)
   end
 
-  defp send_agent_prompt(tmux_name, command, _agent) do
-    :ok = Tmux.send_keys(tmux_name, command)
+  defp send_agent_prompt(tmux_name, command, agent) do
+    wrapped = Prompt.wrap_for_agent(command, agent)
+    :ok = Tmux.send_keys(tmux_name, wrapped)
   end
 
   defp poll_for_agent_completion(tmux_name, started, max_wait, poll_interval) do
