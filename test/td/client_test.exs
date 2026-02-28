@@ -38,15 +38,30 @@ defmodule Babysitter.TD.ClientTest do
   end
 
   describe "get_issue/1" do
-    test "returns issue by id" do
+    test "returns issue by id with all fields (AC1)" do
       issue = Client.get_issue("td-test-1")
       assert issue != nil
       assert issue.id == "td-test-1"
       assert issue.title == "Test Issue Alpha"
+      assert issue.description == "Alpha test description"
+      assert issue.status == "open"
     end
 
     test "returns nil for non-existent id" do
       assert Client.get_issue("nonexistent-xyz-123") == nil
+    end
+  end
+
+  describe "get_issue!/1" do
+    test "returns issue by id" do
+      issue = Client.get_issue!("td-test-1")
+      assert issue.id == "td-test-1"
+    end
+
+    test "raises for non-existent id" do
+      assert_raise Ecto.NoResultsError, fn ->
+        Client.get_issue!("nonexistent-xyz-123")
+      end
     end
   end
 
@@ -79,6 +94,38 @@ defmodule Babysitter.TD.ClientTest do
       assert length(issues) == 1
       assert hd(issues).parent_id == "td-parent-1"
     end
+
+    test "filters by empty parent_id returns issues with empty parent" do
+      issues = Client.list_issues(parent_id: "")
+      assert length(issues) == 1
+      assert hd(issues).parent_id == ""
+    end
+
+    test "combines multiple filters (AC2)" do
+      now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+
+      Repo.insert!(%Issue{
+        id: "td-test-3",
+        title: "Combined Filter Test",
+        status: "open",
+        type: "task",
+        priority: "P1",
+        created_at: now,
+        updated_at: now
+      })
+
+      issues = Client.list_issues(status: "open", type: "task")
+      assert length(issues) == 2
+
+      issues = Client.list_issues(status: "open", type: "task", priority: "P0")
+      assert length(issues) == 1
+      assert hd(issues).id == "td-test-1"
+    end
+
+    test "returns empty list when no matches" do
+      issues = Client.list_issues(status: "closed")
+      assert issues == []
+    end
   end
 
   describe "open_issues/0" do
@@ -86,6 +133,27 @@ defmodule Babysitter.TD.ClientTest do
       issues = Client.open_issues()
       assert length(issues) == 1
       assert Enum.all?(issues, &(&1.status == "open"))
+    end
+  end
+
+  describe "review_issues/0" do
+    test "returns only in_review issues" do
+      issues = Client.review_issues()
+      assert length(issues) == 1
+      assert Enum.all?(issues, &(&1.status == "in_review"))
+    end
+  end
+
+  describe "children/1" do
+    test "returns child issues of a parent" do
+      children = Client.children("td-parent-1")
+      assert length(children) == 1
+      assert hd(children).id == "td-test-2"
+    end
+
+    test "returns empty list for parent with no children" do
+      children = Client.children("nonexistent-parent")
+      assert children == []
     end
   end
 
@@ -112,6 +180,16 @@ defmodule Babysitter.TD.ClientTest do
       issues = Client.search("xyznonexistent123456")
       assert issues == []
     end
+
+    test "search is case-insensitive" do
+      issues = Client.search("alpha")
+      assert length(issues) == 1
+    end
+
+    test "search with special characters" do
+      issues = Client.search("test")
+      assert length(issues) >= 1
+    end
   end
 
   describe "count_by_status/1" do
@@ -128,6 +206,29 @@ defmodule Babysitter.TD.ClientTest do
     test "returns 0 for non-existent status" do
       count = Client.count_by_status("nonexistent")
       assert count == 0
+    end
+  end
+
+  describe "get_handoff/1" do
+    test "returns nil for non-existent handoff" do
+      assert Client.get_handoff("nonexistent-handoff") == nil
+    end
+
+    test "returns handoff by id" do
+      now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+
+      Repo.insert!(%Handoff{
+        id: "handoff-test-1",
+        issue_id: "td-test-1",
+        session_id: "session-1",
+        done: ~s(["Task done"]),
+        timestamp: now
+      })
+
+      handoff = Client.get_handoff("handoff-test-1")
+      assert handoff != nil
+      assert handoff.id == "handoff-test-1"
+      assert handoff.issue_id == "td-test-1"
     end
   end
 

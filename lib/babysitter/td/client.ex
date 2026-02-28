@@ -99,7 +99,7 @@ defmodule Babysitter.TD.Client do
   """
   @spec children(String.t()) :: [Issue.t()]
   def children(parent_id) do
-    from(i in Issue, where: i.parent_id == ^parent_id, order_by: [asc: i.inserted_at])
+    from(i in Issue, where: i.parent_id == ^parent_id, order_by: [asc: i.created_at])
     |> Repo.all()
   end
 

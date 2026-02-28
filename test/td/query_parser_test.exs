@@ -223,5 +223,45 @@ defmodule Babysitter.TD.QueryParserTest do
       assert length(results) == 1
       assert String.contains?(hd(results).title, "Query")
     end
+
+    test "filters with combined AND and OR" do
+      {:ok, ast} = QueryParser.parse("status = open AND (priority = P0 OR priority = P1)")
+      dynamic = QueryParser.to_ecto(ast)
+
+      results = from(i in Issue, where: ^dynamic) |> Repo.all()
+      assert length(results) == 1
+    end
+
+    test "filters with inequality operators" do
+      {:ok, ast} = QueryParser.parse("status != closed")
+      dynamic = QueryParser.to_ecto(ast)
+
+      results = from(i in Issue, where: ^dynamic) |> Repo.all()
+      assert length(results) == 2
+    end
+  end
+
+  describe "parse/1 - complex expressions" do
+    test "parses deeply nested expressions" do
+      assert {:ok, _} = QueryParser.parse("((a = 1 OR b = 2) AND c = 3) OR d = 4")
+    end
+
+    test "parses multiple NOT operators" do
+      assert {:ok, {:not, {:not, _}}} = QueryParser.parse("NOT NOT a = 1")
+    end
+
+    test "parses mixed boolean with proper precedence" do
+      {:ok, ast} = QueryParser.parse("a = 1 OR b = 2 AND c = 3")
+      assert {:or, {:comparison, "a", :=, "1"}, {:and, _, _}} = ast
+    end
+  end
+
+  describe "to_sql/1 - edge cases" do
+    test "handles complex nested expressions" do
+      {:ok, ast} = QueryParser.parse("(a = 1 AND b = 2) OR (c = 3 AND d = 4)")
+      sql = QueryParser.to_sql(ast)
+      assert sql =~ "AND"
+      assert sql =~ "OR"
+    end
   end
 end
