@@ -7,7 +7,7 @@ defmodule Babysitter.Stage do
   """
 
   @derive Jason.Encoder
-  @type stage_type :: :agent | :action | :validation | :decision
+  @type stage_type :: :agent | :action | :validation | :decision | :interrupt
   @type stage_id :: String.t() | atom()
 
   @type t :: %__MODULE__{
@@ -23,6 +23,11 @@ defmodule Babysitter.Stage do
           on_success: stage_id() | nil,
           on_failure: stage_id() | nil,
           on_timeout: stage_id() | nil,
+          on_approve: stage_id() | nil,
+          on_deny: stage_id() | nil,
+          on_modify: stage_id() | nil,
+          interrupt_prompt: String.t() | nil,
+          interrupt_options: [String.t()],
           metadata: map()
         }
 
@@ -40,6 +45,11 @@ defmodule Babysitter.Stage do
     on_success: nil,
     on_failure: nil,
     on_timeout: nil,
+    on_approve: nil,
+    on_deny: nil,
+    on_modify: nil,
+    interrupt_prompt: nil,
+    interrupt_options: [],
     metadata: %{}
   ]
 
@@ -109,6 +119,28 @@ defmodule Babysitter.Stage do
       type: :decision,
       transitions: transitions,
       name: Keyword.get(opts, :name)
+    }
+  end
+
+  @doc """
+  Create an interrupt stage that pauses for human decision.
+
+  The workflow will pause at this stage and wait for human input
+  via the TUI. The user can approve, deny, or request modification.
+  """
+  @spec interrupt(stage_id(), String.t(), keyword()) :: t()
+  def interrupt(id, prompt, opts \\ []) do
+    %__MODULE__{
+      id: id,
+      type: :interrupt,
+      interrupt_prompt: prompt,
+      interrupt_options: Keyword.get(opts, :options, ["approve", "deny", "modify"]),
+      name: Keyword.get(opts, :name),
+      on_approve: Keyword.get(opts, :on_approve),
+      on_deny: Keyword.get(opts, :on_deny),
+      on_modify: Keyword.get(opts, :on_modify),
+      on_success: Keyword.get(opts, :on_success),
+      on_failure: Keyword.get(opts, :on_failure)
     }
   end
 

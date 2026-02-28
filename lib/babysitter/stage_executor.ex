@@ -90,6 +90,10 @@ defmodule Babysitter.StageExecutor do
     execute_validation(stage, session_id, opts)
   end
 
+  def execute(%Stage{type: :interrupt} = stage, session_id, opts) do
+    execute_interrupt(stage, session_id, opts)
+  end
+
   def execute(%Stage{} = stage, session_id, opts) do
     execute_agent(stage, session_id, opts)
   end
@@ -230,6 +234,50 @@ defmodule Babysitter.StageExecutor do
 
   def execute_decision(%Stage{type: type}, _session_id, _opts) do
     {:error, {:invalid_stage_type, expected: :decision, got: type}}
+  end
+
+  @doc """
+  Execute an interrupt stage.
+
+  Interrupt stages pause the workflow and wait for human decision via TUI.
+  The session transitions to `:awaiting_intervention` state and the
+  TUI presents options (approve/deny/modify).
+
+  This function triggers the interrupt and returns immediately with
+  status indicating the interrupt is pending. The workflow should check
+  for the interrupt decision using `Session.get_interrupt_state/1` or
+  `Session.interrupt_pending?/1`.
+  """
+  @spec execute_interrupt(Stage.t(), String.t(), keyword()) ::
+          {:ok, Result.t()} | {:error, term()}
+  def execute_interrupt(%Stage{type: :interrupt} = stage, session_id, _opts) do
+    started_at = DateTime.utc_now()
+    finished_at = DateTime.utc_now()
+
+    prompt = interpolate_with_context(stage.interrupt_prompt || "Approval required", [])
+    options = stage.interrupt_options || ["approve", "deny", "modify"]
+
+    case Session.interrupt(session_id, prompt, options, stage.id) do
+      {:ok, _status} ->
+        result = %Result{
+          stage_id: stage.id,
+          session_id: session_id,
+          started_at: started_at,
+          finished_at: finished_at,
+          status: :success,
+          output: "Waiting for human decision: #{prompt}",
+          exit_code: 0
+        }
+
+        {:ok, result}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  def execute_interrupt(%Stage{type: type}, _session_id, _opts) do
+    {:error, {:invalid_stage_type, expected: :interrupt, got: type}}
   end
 
   @doc """

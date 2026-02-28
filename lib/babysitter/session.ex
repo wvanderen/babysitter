@@ -21,9 +21,18 @@ defmodule Babysitter.Session do
   use GenServer
 
   @type status ::
-          :initializing | :running | :paused | :completed | :failed | :escalated | :stopped
+          :initializing
+          | :running
+          | :paused
+          | :completed
+          | :failed
+          | :escalated
+          | :stopped
+          | :awaiting_intervention
   @type session_id :: String.t()
+  @type stage_id :: String.t() | atom()
   @type transition_error :: {:error, {:invalid_transition, status(), status()}}
+  @type interrupt_decision :: :approve | :deny | :modify
 
   @derive {Jason.Encoder,
            only: [
@@ -38,9 +47,14 @@ defmodule Babysitter.Session do
              :agent,
              :agent_started,
              :langgraph_thread_id,
-             :langgraph_checkpoint_id
+             :langgraph_checkpoint_id,
+             :interrupt_pending,
+             :interrupt_prompt,
+             :interrupt_options,
+             :interrupt_stage_id,
+             :interrupt_decision
            ]}
-  @type t :: %__MODULE__{
+  @type t :: %{
           id: session_id(),
           status: status(),
           tmux_name: String.t() | nil,
@@ -53,7 +67,12 @@ defmodule Babysitter.Session do
           agent: atom() | nil,
           agent_started: boolean(),
           langgraph_thread_id: String.t() | nil,
-          langgraph_checkpoint_id: String.t() | nil
+          langgraph_checkpoint_id: String.t() | nil,
+          interrupt_pending: boolean(),
+          interrupt_prompt: String.t() | nil,
+          interrupt_options: [String.t()],
+          interrupt_stage_id: String.t() | atom() | nil,
+          interrupt_decision: :approve | :deny | :modify | nil
         }
 
   @enforce_keys [:id]
@@ -72,12 +91,18 @@ defmodule Babysitter.Session do
     agent: nil,
     agent_started: false,
     langgraph_thread_id: nil,
-    langgraph_checkpoint_id: nil
+    langgraph_checkpoint_id: nil,
+    interrupt_pending: false,
+    interrupt_prompt: nil,
+    interrupt_options: [],
+    interrupt_stage_id: nil,
+    interrupt_decision: nil
   ]
 
   @valid_transitions %{
     initializing: [:running, :stopped, :failed],
-    running: [:paused, :completed, :failed, :escalated, :stopped],
+    running: [:paused, :completed, :failed, :escalated, :stopped, :awaiting_intervention],
+    awaiting_intervention: [:running, :stopped, :failed],
     paused: [:running, :escalated, :stopped],
     completed: [:stopped],
     failed: [:stopped],
@@ -191,6 +216,45 @@ defmodule Babysitter.Session do
 
   def resume(id) do
     GenServer.call(via_tuple(id), :resume)
+  end
+
+  @doc """
+  Trigger an interrupt and pause the session for human decision.
+
+  The session will transition to `:awaiting_intervention` state and
+  store the interrupt details for the TUI to display.
+  """
+  @spec interrupt(session_id(), String.t(), [String.t()], stage_id()) ::
+          {:ok, status()} | transition_error()
+  def interrupt(id, prompt, options, stage_id) do
+    GenServer.call(via_tuple(id), {:interrupt, prompt, options, stage_id})
+  end
+
+  @doc """
+  Get the current interrupt state for a session.
+  """
+  @spec get_interrupt_state(session_id()) :: {:ok, map()} | {:error, :no_interrupt_pending}
+  def get_interrupt_state(id) do
+    GenServer.call(via_tuple(id), :get_interrupt_state)
+  end
+
+  @doc """
+  Submit a human decision for a pending interrupt.
+
+  The decision can be :approve, :deny, or :modify.
+  """
+  @spec submit_decision(session_id(), interrupt_decision(), String.t() | nil) ::
+          {:ok, status()} | transition_error()
+  def submit_decision(id, decision, modified_context \\ nil) do
+    GenServer.call(via_tuple(id), {:submit_decision, decision, modified_context})
+  end
+
+  @doc """
+  Check if session has a pending interrupt.
+  """
+  @spec interrupt_pending?(session_id()) :: boolean()
+  def interrupt_pending?(id) do
+    GenServer.call(via_tuple(id), :interrupt_pending?)
   end
 
   def stop(id) do
@@ -430,6 +494,63 @@ defmodule Babysitter.Session do
       {:reply, {:ok, :running}, %{state | status: :running}}
     else
       {:error, _} = error -> {:reply, error, state}
+    end
+  end
+
+  def handle_call({:interrupt, prompt, options, stage_id}, _from, state) do
+    with :ok <- validate_transition(state.status, :awaiting_intervention) do
+      new_state = %{
+        state
+        | status: :awaiting_intervention,
+          interrupt_pending: true,
+          interrupt_prompt: prompt,
+          interrupt_options: options,
+          interrupt_stage_id: stage_id,
+          interrupt_decision: nil
+      }
+
+      {:reply, {:ok, :awaiting_intervention}, new_state}
+    else
+      {:error, _} = error -> {:reply, error, state}
+    end
+  end
+
+  def handle_call(:get_interrupt_state, _from, state) do
+    if state.interrupt_pending do
+      {:reply,
+       {:ok,
+        %{
+          prompt: state.interrupt_prompt,
+          options: state.interrupt_options,
+          stage_id: state.interrupt_stage_id,
+          session_id: state.id,
+          output_buffer: state.output_buffer
+        }}, state}
+    else
+      {:reply, {:error, :no_interrupt_pending}, state}
+    end
+  end
+
+  def handle_call(:interrupt_pending?, _from, state) do
+    {:reply, state.interrupt_pending, state}
+  end
+
+  def handle_call({:submit_decision, decision, _modified_context}, _from, state) do
+    if state.interrupt_pending do
+      with :ok <- validate_transition(state.status, :running) do
+        new_state = %{
+          state
+          | status: :running,
+            interrupt_pending: false,
+            interrupt_decision: decision
+        }
+
+        {:reply, {:ok, :running}, new_state}
+      else
+        {:error, _} = error -> {:reply, error, state}
+      end
+    else
+      {:reply, {:error, :no_interrupt_pending}, state}
     end
   end
 
