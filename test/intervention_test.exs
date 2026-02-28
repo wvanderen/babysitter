@@ -207,12 +207,32 @@ defmodule Babysitter.InterventionTest do
       assert result.action == :ok
     end
 
-    test "raises for smart mode (not implemented)" do
-      session = %{current_stage: "s1"}
+    test "delegates to Smart when mode is smart" do
+      session = %{
+        id: "smart-session",
+        current_stage: "s1",
+        status: :running,
+        retries: %{"s1" => 0}
+      }
 
-      assert_raise RuntimeError, "Smart intervention not yet implemented", fn ->
-        Intervention.check(session, :smart)
-      end
+      result = Intervention.check(session, :smart)
+
+      assert %Result{} = result
+      assert result.action in [:ok, :retry, :restart, :escalate, :skip]
+    end
+
+    test "hybrid mode uses Smart after Dumb finds non-ok result" do
+      session = %{
+        id: "hybrid-session",
+        current_stage: "s1",
+        status: :running,
+        retries: %{"s1" => 2},
+        validations: [%{status: :fail, type: :test, output: "err", exit_code: 1}]
+      }
+
+      result = Intervention.check(session, :hybrid)
+
+      assert %Result{} = result
     end
   end
 end

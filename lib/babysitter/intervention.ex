@@ -4,7 +4,7 @@ defmodule Babysitter.Intervention do
 
   Two modes:
   - `:dumb` - Rules-based intervention (max retries, timeout, validation failure)
-  - `:smart` - LLM-powered analysis (future)
+  - `:smart` - LLM-powered analysis via LangGraph
   - `:hybrid` - Dumb for happy path, smart on failure
   """
 
@@ -75,6 +75,7 @@ defmodule Babysitter.Intervention do
 
   alias Babysitter.Intervention.Dumb
   alias Babysitter.Intervention.Result
+  alias Babysitter.Intervention.Smart
 
   @doc """
   Check if intervention is needed for a session.
@@ -90,8 +91,8 @@ defmodule Babysitter.Intervention do
     end
   end
 
-  defp check_smart(_session) do
-    raise "Smart intervention not yet implemented"
+  defp check_smart(session) do
+    Smart.analyze(session)
   end
 
   defp check_hybrid(session) do
