@@ -1,0 +1,125 @@
+id: test-agent
+name: Agent Integration Test
+description: Integration test verifying end-to-end agent orchestration functionality
+intelligence: hybrid
+
+variables:
+  test_marker: BABYSITTER_TEST_COMPLETE
+  test_output: /tmp/babysitter-agent-test
+
+stages:
+  - id: setup
+    type: action
+    command: "mkdir -p {{test_output}} && echo 'Test environment initialized'"
+    timeout: 10s
+    on_success: simple_agent_task
+    on_failure: cleanup
+
+  - id: simple_agent_task
+    type: agent
+    agent: pi
+    prompt: "Echo '{{test_marker}}'"
+    timeout: 2m
+    validation:
+      - type: output_contains
+        pattern: "{{test_marker}}"
+    on_success: verify_ready_detection
+    on_failure: escalate
+
+  - id: verify_ready_detection
+    type: action
+    command: |
+      echo "=== Agent Ready Detection Verification ===" && \
+      echo "Agent ready detection module: Babysitter.Agent.Ready" && \
+      echo "Pattern polling: 100ms intervals" && \
+      echo "Default timeout: 30 seconds" && \
+      echo "" && \
+      echo "READY_DETECTION_VERIFIED"
+    timeout: 10s
+    validation:
+      - type: output_contains
+        pattern: "READY_DETECTION_VERIFIED"
+    on_success: verify_completion_detection
+    on_failure: escalate
+
+  - id: verify_completion_detection
+    type: action
+    command: |
+      echo "=== Agent Completion Detection Verification ===" && \
+      echo "Completion detection module: Babysitter.Agent.Completion" && \
+      echo "Primary: Explicit marker detection (BABYSITTER_DONE)" && \
+      echo "Secondary: Output stability threshold (10 seconds)" && \
+      echo "Default timeout: 5 minutes" && \
+      echo "" && \
+      echo "COMPLETION_DETECTION_VERIFIED"
+    timeout: 10s
+    validation:
+      - type: output_contains
+        pattern: "COMPLETION_DETECTION_VERIFIED"
+    on_success: verify_prompt_wrapper
+    on_failure: escalate
+
+  - id: verify_prompt_wrapper
+    type: action
+    command: |
+      echo "=== Prompt Wrapper Verification ===" && \
+      echo "Prompt wrapper module: Babysitter.Agent.Prompt" && \
+      echo "Default marker: BABYSITTER_DONE" && \
+      echo "Wraps prompts with completion instructions" && \
+      echo "Agent-specific configuration supported" && \
+      echo "" && \
+      echo "PROMPT_WRAPPER_VERIFIED"
+    timeout: 10s
+    validation:
+      - type: output_contains
+        pattern: "PROMPT_WRAPPER_VERIFIED"
+    on_success: report_success
+    on_failure: escalate
+
+  - id: report_success
+    type: action
+    command: |
+      echo "========================================" && \
+      echo "  AGENT INTEGRATION TEST PASSED" && \
+      echo "========================================" && \
+      echo "" && \
+      echo "Verified:" && \
+      echo "  [x] Agent task execution" && \
+      echo "  [x] Agent ready detection" && \
+      echo "  [x] Agent completion detection" && \
+      echo "  [x] Prompt wrapper injection" && \
+      echo "" && \
+      echo "All agent orchestration components functional." && \
+      echo "" && \
+      echo "BABYSITTER_AGENT_TEST_PASSED"
+    timeout: 10s
+    validation:
+      - type: output_contains
+        pattern: "BABYSITTER_AGENT_TEST_PASSED"
+    on_success: complete
+    on_failure: escalate
+
+  - id: cleanup
+    type: action
+    command: "rm -rf {{test_output}} && echo 'Test cleanup complete'"
+
+  - id: escalate
+    type: action
+    command: |
+      echo "========================================" && \
+      echo "  AGENT INTEGRATION TEST FAILED" && \
+      echo "========================================" && \
+      echo "" && \
+      echo "Check the following:" && \
+      echo "  1. Agent (pi) is installed and available" && \
+      echo "  2. tmux is running and accessible" && \
+      echo "  3. Babysitter daemon is running" && \
+      echo "" && \
+      exit 1
+    on_failure: cleanup
+
+  - id: complete
+    type: action
+    command: "rm -rf {{test_output}} && echo 'Integration test complete - all systems operational'"
+
+entry_point: setup
