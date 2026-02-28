@@ -37,7 +37,13 @@ defmodule Babysitter.Config do
         message_template: "{{issue.id}}: {{issue.title}}\n\n{{stage.summary}}"
       },
       pr_strategy: %{
-        trigger: "manual"
+        trigger: "manual",
+        title_template: "{{issue.id}}: {{issue.title}}",
+        body_template: "## Summary\n{{stage.summary}}\n\n## Completed\n{{issue.done}}",
+        labels: [],
+        reviewers: [],
+        base: "main",
+        draft: false
       },
       normalization: %{
         patterns: ["wip:", "fixup:", "tmp:", "draft:"],
@@ -160,6 +166,81 @@ defmodule Babysitter.Config do
   end
 
   @doc """
+  Get git PR strategy configuration.
+  """
+  @spec git_pr_strategy() :: map()
+  def git_pr_strategy do
+    get(:git, :pr_strategy) || @default_config.git.pr_strategy
+  end
+
+  @doc """
+  Get PR trigger type.
+  """
+  @spec git_pr_trigger() :: atom()
+  def git_pr_trigger do
+    strategy = git_pr_strategy()
+    trigger = Map.get(strategy, :trigger, "manual")
+
+    trigger
+    |> to_string()
+    |> String.to_atom()
+  end
+
+  @doc """
+  Get PR title template.
+  """
+  @spec git_pr_title_template() :: String.t() | nil
+  def git_pr_title_template do
+    strategy = git_pr_strategy()
+    Map.get(strategy, :title_template)
+  end
+
+  @doc """
+  Get PR body template.
+  """
+  @spec git_pr_body_template() :: String.t() | nil
+  def git_pr_body_template do
+    strategy = git_pr_strategy()
+    Map.get(strategy, :body_template)
+  end
+
+  @doc """
+  Get PR labels.
+  """
+  @spec git_pr_labels() :: [String.t()]
+  def git_pr_labels do
+    strategy = git_pr_strategy()
+    Map.get(strategy, :labels, [])
+  end
+
+  @doc """
+  Get PR reviewers.
+  """
+  @spec git_pr_reviewers() :: [String.t()]
+  def git_pr_reviewers do
+    strategy = git_pr_strategy()
+    Map.get(strategy, :reviewers, [])
+  end
+
+  @doc """
+  Get PR base branch.
+  """
+  @spec git_pr_base() :: String.t()
+  def git_pr_base do
+    strategy = git_pr_strategy()
+    Map.get(strategy, :base, "main")
+  end
+
+  @doc """
+  Get PR draft option.
+  """
+  @spec git_pr_draft?() :: boolean()
+  def git_pr_draft? do
+    strategy = git_pr_strategy()
+    Map.get(strategy, :draft, false)
+  end
+
+  @doc """
   Get intervention configuration.
   """
   @spec intervention() :: map()
@@ -253,6 +334,17 @@ defmodule Babysitter.Config do
           {{stage.summary}}
       pr_strategy:
         trigger: manual
+        title_template: "{{issue.id}}: {{issue.title}}"
+        body_template: |
+          ## Summary
+          {{stage.summary}}
+
+          ## Completed
+          {{issue.done}}
+        labels: []
+        reviewers: []
+        base: main
+        draft: false
       normalization:
         patterns:
           - "wip:"
