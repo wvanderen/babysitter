@@ -131,6 +131,36 @@ defmodule Babysitter.ConfigTest do
     end
   end
 
+  describe "agent_completion_pattern/1" do
+    test "returns nil for agent without completion pattern" do
+      assert Config.agent_completion_pattern(:claude) == nil
+    end
+
+    test "returns nil for unknown agent" do
+      assert Config.agent_completion_pattern(:unknown) == nil
+    end
+  end
+
+  describe "agent_completion_timeout/1" do
+    test "returns default timeout for agent without custom timeout" do
+      assert Config.agent_completion_timeout(:claude) == 300_000
+    end
+
+    test "returns default timeout for unknown agent" do
+      assert Config.agent_completion_timeout(:unknown) == 300_000
+    end
+  end
+
+  describe "agent_stability_threshold/1" do
+    test "returns default threshold for agent without custom threshold" do
+      assert Config.agent_stability_threshold(:claude) == 10_000
+    end
+
+    test "returns default threshold for unknown agent" do
+      assert Config.agent_stability_threshold(:unknown) == 10_000
+    end
+  end
+
   describe "deep merge behavior" do
     test "user config overrides defaults" do
       original_exists = Config.config_exists?()

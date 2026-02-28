@@ -8,6 +8,7 @@ defmodule Babysitter.StageExecutor do
 
   alias Babysitter.{Session, Stage, Tmux, Validation, TemplateInterpolator}
   alias Babysitter.Validation.{CompileRunner, TestRunner, CommandRunner, Result}
+  alias Babysitter.Agent.Completion
 
   @type execution_status :: :success | :failure | :timeout
   @type exit_code :: non_neg_integer() | nil
@@ -730,8 +731,7 @@ defmodule Babysitter.StageExecutor do
   end
 
   defp poll_for_agent_completion(tmux_name, started, max_wait, poll_interval) do
-    stable_threshold = 5000
-    do_poll_for_agent(tmux_name, started, max_wait, poll_interval, stable_threshold, nil, 0)
+    do_poll_for_agent(tmux_name, started, max_wait, poll_interval, nil, 0)
   end
 
   defp do_poll_for_agent(
@@ -739,7 +739,6 @@ defmodule Babysitter.StageExecutor do
          started,
          max_wait,
          poll_interval,
-         stable_threshold,
          last_output,
          stable_ms
        ) do
@@ -756,28 +755,26 @@ defmodule Babysitter.StageExecutor do
 
       case Tmux.capture_pane(tmux_name) do
         output when is_binary(output) ->
-          normalized = normalize_for_stability(output)
-          last_normalized = if last_output, do: normalize_for_stability(last_output), else: nil
+          case Completion.check(output,
+                 marker: nil,
+                 stability_threshold: 5000,
+                 last_output: last_output,
+                 stable_ms: stable_ms
+               ) do
+            {:ok, _} ->
+              {:ok, output}
 
-          new_stable_ms =
-            if normalized == last_normalized do
-              stable_ms + poll_interval
-            else
-              0
-            end
+            {:continue, _} ->
+              new_stable_ms = Completion.calculate_stable_ms(output, last_output, stable_ms)
 
-          if new_stable_ms >= stable_threshold do
-            {:ok, output}
-          else
-            do_poll_for_agent(
-              tmux_name,
-              started,
-              max_wait,
-              poll_interval,
-              stable_threshold,
-              output,
-              new_stable_ms
-            )
+              do_poll_for_agent(
+                tmux_name,
+                started,
+                max_wait,
+                poll_interval,
+                output,
+                new_stable_ms
+              )
           end
 
         {:error, _} = error ->

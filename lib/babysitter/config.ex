@@ -150,6 +150,55 @@ defmodule Babysitter.Config do
   end
 
   @doc """
+  Get agent completion pattern by name.
+
+  Returns the completion_pattern configured for the agent, or nil if not configured.
+  """
+  @spec agent_completion_pattern(atom()) :: String.t() | nil
+  def agent_completion_pattern(name) when is_atom(name) do
+    case agent(name) do
+      nil -> nil
+      config -> Map.get(config, :completion_pattern)
+    end
+  end
+
+  @doc """
+  Get agent completion timeout by name.
+
+  Returns the completion_timeout configured for the agent, or default timeout.
+  """
+  @spec agent_completion_timeout(atom()) :: non_neg_integer()
+  def agent_completion_timeout(name) when is_atom(name) do
+    case agent(name) do
+      nil ->
+        Babysitter.Agent.Completion.default_timeout()
+
+      config ->
+        Map.get(config, :completion_timeout, Babysitter.Agent.Completion.default_timeout())
+    end
+  end
+
+  @doc """
+  Get agent stability threshold by name.
+
+  Returns the stability_threshold configured for the agent, or default threshold.
+  """
+  @spec agent_stability_threshold(atom()) :: non_neg_integer()
+  def agent_stability_threshold(name) when is_atom(name) do
+    case agent(name) do
+      nil ->
+        Babysitter.Agent.Completion.default_stability_threshold()
+
+      config ->
+        Map.get(
+          config,
+          :stability_threshold,
+          Babysitter.Agent.Completion.default_stability_threshold()
+        )
+    end
+  end
+
+  @doc """
   Get all configured agents.
   """
   @spec agents() :: map()
