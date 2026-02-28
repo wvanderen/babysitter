@@ -468,10 +468,28 @@ defmodule Babysitter.Session do
   def handle_call(:ensure_agent_started, _from, %__MODULE__{} = state) do
     case do_start_agent(state.tmux_name, state.agent) do
       :ok ->
-        {:reply, :ok, %{state | agent_started: true}}
+        case wait_for_agent_ready(state.tmux_name, state.agent) do
+          {:ok, :ready} ->
+            {:reply, :ok, %{state | agent_started: true}}
+
+          {:error, :timeout} = error ->
+            {:reply, error, state}
+        end
 
       {:error, _} = error ->
         {:reply, error, state}
+    end
+  end
+
+  defp wait_for_agent_ready(_tmux_name, nil), do: {:ok, :ready}
+
+  defp wait_for_agent_ready(tmux_name, agent_name) when is_atom(agent_name) do
+    pattern = Babysitter.Config.agent_ready_pattern(agent_name)
+    timeout = Babysitter.Config.agent_ready_timeout(agent_name)
+
+    case pattern do
+      nil -> {:ok, :ready}
+      _ -> Babysitter.Agent.Ready.wait_for_ready(tmux_name, pattern, timeout)
     end
   end
 

@@ -20,15 +20,21 @@ defmodule Babysitter.Config do
     agents: %{
       claude: %{
         command: "claude",
-        args: ["--dangerously-skip-permissions"]
+        args: ["--dangerously-skip-permissions"],
+        ready_pattern: ">",
+        ready_timeout: 60_000
       },
       opencode: %{
         command: "opencode",
-        args: []
+        args: [],
+        ready_pattern: ">",
+        ready_timeout: 60_000
       },
       pi: %{
         command: "pi",
-        args: ["--no-session"]
+        args: ["--no-session"],
+        ready_pattern: "❯|>",
+        ready_timeout: 30_000
       }
     },
     git: %{
@@ -115,6 +121,32 @@ defmodule Babysitter.Config do
   @spec agent(atom()) :: map() | nil
   def agent(name) when is_atom(name) do
     get(:agents, name)
+  end
+
+  @doc """
+  Get agent ready pattern by name.
+
+  Returns the ready_pattern configured for the agent, or nil if not configured.
+  """
+  @spec agent_ready_pattern(atom()) :: String.t() | nil
+  def agent_ready_pattern(name) when is_atom(name) do
+    case agent(name) do
+      nil -> nil
+      config -> Map.get(config, :ready_pattern)
+    end
+  end
+
+  @doc """
+  Get agent ready timeout by name.
+
+  Returns the ready_timeout configured for the agent, or default timeout.
+  """
+  @spec agent_ready_timeout(atom()) :: non_neg_integer()
+  def agent_ready_timeout(name) when is_atom(name) do
+    case agent(name) do
+      nil -> Babysitter.Agent.Ready.default_timeout()
+      config -> Map.get(config, :ready_timeout, Babysitter.Agent.Ready.default_timeout())
+    end
   end
 
   @doc """
@@ -317,13 +349,19 @@ defmodule Babysitter.Config do
         command: claude
         args:
           - --dangerously-skip-permissions
+        ready_pattern: ">"
+        ready_timeout: 60000
       opencode:
         command: opencode
         args: []
+        ready_pattern: ">"
+        ready_timeout: 60000
       pi:
         command: pi
         args:
           - --no-session
+        ready_pattern: "❯|>"
+        ready_timeout: 30000
 
     git:
       commit_strategy:
