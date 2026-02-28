@@ -7,6 +7,7 @@ defmodule Babysitter.StageExecutor do
   """
 
   alias Babysitter.{Session, Stage, Tmux, Validation, TemplateInterpolator}
+  alias Babysitter.Validation.{CompileRunner, TestRunner, CommandRunner, Result}
 
   @type execution_status :: :success | :failure | :timeout
   @type exit_code :: non_neg_integer() | nil
@@ -441,13 +442,17 @@ defmodule Babysitter.StageExecutor do
 
   @doc """
   Run validations against an execution result.
+
+  Handles two types of validations:
+  - Runner validations (compile, tests, command): Execute actual commands
+  - Output-check validations: Check the existing output/exit code
   """
   @spec validate_result(Result.t(), [Validation.t()]) :: :ok | {:error, [String.t()]}
   def validate_result(%Result{} = result, validations) do
     results =
       validations
       |> Enum.map(fn validation ->
-        Validation.run(validation, result.output, result.exit_code || 0)
+        run_single_validation(validation, result)
       end)
 
     errors =
@@ -463,6 +468,85 @@ defmodule Babysitter.StageExecutor do
     else
       {:error, errors}
     end
+  end
+
+  defp run_single_validation(%Validation{type: :compile} = validation, _result) do
+    opts = build_runner_opts(validation)
+
+    case CompileRunner.run_and_validate(opts) do
+      :ok -> :ok
+      {:error, msg} -> {:error, validation.error_message || msg}
+    end
+  end
+
+  defp run_single_validation(%Validation{type: :tests} = validation, _result) do
+    opts = build_runner_opts(validation)
+
+    case TestRunner.run_and_validate(opts) do
+      :ok -> :ok
+      {:error, msg} -> {:error, validation.error_message || msg}
+    end
+  end
+
+  defp run_single_validation(%Validation{type: :lint} = validation, _result) do
+    opts = build_runner_opts(validation)
+
+    if validation.command do
+      case CommandRunner.run_and_validate(validation.command, opts) do
+        :ok ->
+          :ok
+
+        {:error, %Babysitter.Validation.Result{} = r} ->
+          {:error, validation.error_message || r.output}
+      end
+    else
+      {:error, "lint validation requires a command"}
+    end
+  end
+
+  defp run_single_validation(%Validation{type: :command, command: cmd} = validation, _result)
+       when is_binary(cmd) do
+    opts = build_runner_opts(validation)
+
+    case CommandRunner.run_and_validate(cmd, opts) do
+      :ok ->
+        :ok
+
+      {:error, %Babysitter.Validation.Result{} = r} ->
+        {:error, validation.error_message || r.output}
+    end
+  end
+
+  defp run_single_validation(%Validation{type: :command}, _result) do
+    {:error, "command validation requires a command"}
+  end
+
+  defp run_single_validation(%Validation{} = validation, %Result{} = result) do
+    Validation.run(validation, result.output, result.exit_code || 0)
+  end
+
+  defp build_runner_opts(%Validation{} = validation) do
+    opts = []
+
+    opts =
+      if validation.cwd, do: Keyword.put(opts, :cwd, validation.cwd), else: opts
+
+    opts =
+      if validation.timeout, do: Keyword.put(opts, :timeout, validation.timeout), else: opts
+
+    opts =
+      if validation.env, do: Keyword.put(opts, :env, validation.env), else: opts
+
+    opts =
+      if validation.command, do: Keyword.put(opts, :command, validation.command), else: opts
+
+    opts =
+      if validation.language, do: Keyword.put(opts, :language, validation.language), else: opts
+
+    opts =
+      if validation.framework, do: Keyword.put(opts, :framework, validation.framework), else: opts
+
+    opts
   end
 
   @doc """

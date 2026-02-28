@@ -244,33 +244,47 @@ defmodule Babysitter.Workflow.Parser do
 
   defp parse_validation(%{type: :compile} = v) do
     %Validation{
-      type: :exit_code,
-      pattern: 0,
-      error_message: v[:error_message] || "Compilation failed"
+      type: :compile,
+      language: v[:language],
+      command: v[:command],
+      cwd: v[:cwd],
+      timeout: v[:timeout],
+      env: v[:env],
+      error_message: v[:error_message]
     }
   end
 
   defp parse_validation(%{type: :tests} = v) do
     %Validation{
-      type: :exit_code,
-      pattern: 0,
-      error_message: v[:error_message] || "Tests failed"
+      type: :tests,
+      framework: v[:framework],
+      command: v[:command],
+      cwd: v[:cwd],
+      timeout: v[:timeout],
+      env: v[:env],
+      error_message: v[:error_message]
     }
   end
 
   defp parse_validation(%{type: :lint} = v) do
     %Validation{
-      type: :exit_code,
-      pattern: 0,
+      type: :lint,
+      command: v[:command],
+      cwd: v[:cwd],
+      timeout: v[:timeout],
+      env: v[:env],
       error_message: v[:error_message] || "Linting failed"
     }
   end
 
   defp parse_validation(%{type: :command} = v) do
     %Validation{
-      type: :exit_code,
-      pattern: 0,
-      error_message: v[:error_message] || "Command failed: #{v[:command]}"
+      type: :command,
+      command: v[:command],
+      cwd: v[:cwd],
+      timeout: v[:timeout],
+      env: v[:env],
+      error_message: v[:error_message]
     }
   end
 

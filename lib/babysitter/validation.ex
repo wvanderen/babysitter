@@ -4,6 +4,25 @@ defmodule Babysitter.Validation do
 
   Validations check the output/result of a stage execution
   to determine if it was successful.
+
+  ## Runner Types (execute commands)
+
+  The following validation types actually execute commands:
+  - `:compile` - Runs compile command for the project (mix compile, go build, etc.)
+  - `:tests` - Runs test command for the project (mix test, go test, pytest, etc.)
+  - `:lint` - Runs lint command for the project
+  - `:command` - Runs a custom command
+
+  ## Output Check Types (check existing output)
+
+  The following validation types check the output of the stage execution:
+  - `:output_contains` - Checks if output contains a string
+  - `:output_matches` - Checks if output matches a regex
+  - `:exit_code` - Checks the exit code
+  - `:output_equals` - Checks if output equals a string
+  - `:file_exists` - Checks if a file exists
+  - `:file_contains` - Checks if a file contains a pattern
+  - `:custom` - Custom validation function
   """
 
   @derive Jason.Encoder
@@ -15,23 +34,51 @@ defmodule Babysitter.Validation do
           | :file_exists
           | :file_contains
           | :custom
+          | :compile
+          | :tests
+          | :lint
+          | :command
 
   @type t :: %__MODULE__{
           type: validation_type(),
-          pattern: String.t() | Regex.t() | non_neg_integer() | function(),
+          pattern: String.t() | Regex.t() | non_neg_integer() | function() | nil,
           path: String.t() | nil,
           negate: boolean(),
-          error_message: String.t() | nil
+          error_message: String.t() | nil,
+          command: String.t() | nil,
+          cwd: String.t() | nil,
+          timeout: non_neg_integer() | nil,
+          env: map() | nil,
+          language: atom() | nil,
+          framework: atom() | nil
         }
 
   @enforce_keys [:type]
   defstruct [
     :type,
     :path,
+    :command,
+    :cwd,
+    :timeout,
+    :env,
+    :language,
+    :framework,
     pattern: nil,
     negate: false,
     error_message: nil
   ]
+
+  @doc """
+  Check if this validation type requires running an external command.
+
+  Runner validations execute commands and should be handled by the
+  appropriate runner modules (CompileRunner, TestRunner, CommandRunner).
+  """
+  @spec runner_type?(t()) :: boolean()
+  def runner_type?(%__MODULE__{type: type}) when type in [:compile, :tests, :lint, :command],
+    do: true
+
+  def runner_type?(%__MODULE__{}), do: false
 
   @doc """
   Create a validation that checks if output contains a string.
@@ -115,7 +162,108 @@ defmodule Babysitter.Validation do
   end
 
   @doc """
+  Create a validation that runs compile for the project.
+
+  ## Options
+    * `:language` - Force a specific language (:elixir, :typescript, :go, :rust)
+    * `:command` - Custom compile command (overrides auto-detection)
+    * `:cwd` - Working directory (defaults to current)
+    * `:timeout` - Timeout in milliseconds (default: 300_000)
+    * `:env` - Environment variables to set
+
+  ## Examples
+
+      Validation.compile()
+      Validation.compile(language: :elixir)
+      Validation.compile(command: "mix compile --warnings-as-errors")
+  """
+  @spec compile(keyword()) :: t()
+  def compile(opts \\ []) do
+    %__MODULE__{
+      type: :compile,
+      language: Keyword.get(opts, :language),
+      command: Keyword.get(opts, :command),
+      cwd: Keyword.get(opts, :cwd),
+      timeout: Keyword.get(opts, :timeout),
+      env: Keyword.get(opts, :env),
+      error_message: Keyword.get(opts, :error_message)
+    }
+  end
+
+  @doc """
+  Create a validation that runs tests for the project.
+
+  ## Options
+    * `:framework` - Force a specific framework (:mix, :npm, :yarn, :go, :pytest)
+    * `:command` - Custom test command (overrides auto-detection)
+    * `:cwd` - Working directory (defaults to current)
+    * `:timeout` - Timeout in milliseconds (default: 300_000)
+    * `:env` - Environment variables to set
+
+  ## Examples
+
+      Validation.tests()
+      Validation.tests(framework: :mix)
+      Validation.tests(command: "mix test --trace")
+  """
+  @spec tests(keyword()) :: t()
+  def tests(opts \\ []) do
+    %__MODULE__{
+      type: :tests,
+      framework: Keyword.get(opts, :framework),
+      command: Keyword.get(opts, :command),
+      cwd: Keyword.get(opts, :cwd),
+      timeout: Keyword.get(opts, :timeout),
+      env: Keyword.get(opts, :env),
+      error_message: Keyword.get(opts, :error_message)
+    }
+  end
+
+  @doc """
+  Create a validation that runs a custom command.
+
+  ## Options
+    * `:cwd` - Working directory (defaults to current)
+    * `:timeout` - Timeout in milliseconds (default: 60_000)
+    * `:env` - Environment variables to set
+
+  ## Examples
+
+      Validation.command("scripts/validate.sh")
+      Validation.command("npm run lint", cwd: "/path/to/project")
+  """
+  @spec command(String.t(), keyword()) :: t()
+  def command(cmd, opts \\ []) do
+    %__MODULE__{
+      type: :command,
+      command: cmd,
+      cwd: Keyword.get(opts, :cwd),
+      timeout: Keyword.get(opts, :timeout),
+      env: Keyword.get(opts, :env),
+      error_message: Keyword.get(opts, :error_message)
+    }
+  end
+
+  @doc """
+  Create a lint validation (alias for command with common lint commands).
+  """
+  @spec lint(keyword()) :: t()
+  def lint(opts \\ []) do
+    %__MODULE__{
+      type: :lint,
+      command: Keyword.get(opts, :command),
+      cwd: Keyword.get(opts, :cwd),
+      timeout: Keyword.get(opts, :timeout),
+      env: Keyword.get(opts, :env),
+      error_message: Keyword.get(opts, :error_message, "Linting failed")
+    }
+  end
+
+  @doc """
   Run the validation against output and exit code.
+
+  Note: This function is for output-check validations. Runner validations
+  (compile, tests, command) should be handled by StageExecutor.validate_result/2.
   """
   @spec run(t(), String.t(), non_neg_integer()) :: :ok | {:error, String.t()}
   def run(%__MODULE__{} = validation, output, exit_code) do

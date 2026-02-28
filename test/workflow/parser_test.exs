@@ -383,8 +383,31 @@ defmodule Babysitter.Workflow.ParserTest do
       [validation] = workflow.stages[:s1].validations
 
       assert %Validation{} = validation
-      assert validation.type == :exit_code
-      assert validation.pattern == 0
+      assert validation.type == :compile
+    end
+
+    test "parses compile validation with options" do
+      yaml = """
+      id: test
+      name: Test
+      stages:
+        - id: s1
+          validation:
+            - type: compile
+              language: elixir
+              command: mix compile
+              cwd: /tmp/project
+              timeout: 60000
+      """
+
+      assert {:ok, workflow} = Parser.parse_string(yaml)
+      [validation] = workflow.stages[:s1].validations
+
+      assert validation.type == :compile
+      assert validation.language == "elixir"
+      assert validation.command == "mix compile"
+      assert validation.cwd == "/tmp/project"
+      assert validation.timeout == 60000
     end
 
     test "parses tests validation" do
@@ -400,8 +423,27 @@ defmodule Babysitter.Workflow.ParserTest do
       assert {:ok, workflow} = Parser.parse_string(yaml)
       [validation] = workflow.stages[:s1].validations
 
-      assert validation.type == :exit_code
-      assert validation.error_message =~ "Tests failed"
+      assert validation.type == :tests
+    end
+
+    test "parses tests validation with options" do
+      yaml = """
+      id: test
+      name: Test
+      stages:
+        - id: s1
+          validation:
+            - type: tests
+              framework: mix
+              command: mix test --trace
+      """
+
+      assert {:ok, workflow} = Parser.parse_string(yaml)
+      [validation] = workflow.stages[:s1].validations
+
+      assert validation.type == :tests
+      assert validation.framework == "mix"
+      assert validation.command == "mix test --trace"
     end
 
     test "parses lint validation" do
@@ -412,13 +454,32 @@ defmodule Babysitter.Workflow.ParserTest do
         - id: s1
           validation:
             - type: lint
+              command: mix format --check-formatted
       """
 
       assert {:ok, workflow} = Parser.parse_string(yaml)
       [validation] = workflow.stages[:s1].validations
 
-      assert validation.type == :exit_code
-      assert validation.error_message =~ "Lint"
+      assert validation.type == :lint
+      assert validation.command == "mix format --check-formatted"
+    end
+
+    test "parses command validation" do
+      yaml = """
+      id: test
+      name: Test
+      stages:
+        - id: s1
+          validation:
+            - type: command
+              command: ./scripts/validate.sh
+      """
+
+      assert {:ok, workflow} = Parser.parse_string(yaml)
+      [validation] = workflow.stages[:s1].validations
+
+      assert validation.type == :command
+      assert validation.command == "./scripts/validate.sh"
     end
 
     test "parses output_contains validation" do
