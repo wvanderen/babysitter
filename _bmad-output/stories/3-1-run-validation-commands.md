@@ -7,9 +7,9 @@ Status: ready-for-dev
 ## td Integration
 
 - **td Epic**: `td-454b8e`
-- **td Tasks**: 4 issues (2 open, 0 in-progress, 0 blocked, 2 in_review)
-- **Last Sync**: 2026-02-28T12:30:00
-- **Sync Status**: initialized
+- **td Tasks**: 4 issues (0 open, 0 in-progress, 0 blocked, 4 in_review)
+- **Last Sync**: 2026-02-28T12:56:00
+- **Sync Status**: all_tasks_complete
 
 ### Task → td Mapping
 
@@ -17,8 +17,8 @@ Status: ready-for-dev
 |------|----------|--------|
 | Task 1 | `td-f31e80` | in_review |
 | Task 2 | `td-51d1fb` | in_review |
-| Task 3 | `td-da3ef9` | open |
-| Task 4 | `td-35c831` | open |
+| Task 3 | `td-da3ef9` | in_review |
+| Task 4 | `td-35c831` | in_review |
 
 ---
 
@@ -47,10 +47,10 @@ so that quality gates can block progression on failure.
   - [x] 2.1 Detect project type from mix.exs/go.mod/package.json
   - [x] 2.2 Map project type to validation commands
   - [x] 2.3 Handle mixed monorepo scenarios
-- [ ] Task 3: Integrate validation with workflow stage execution (AC: #4) [td:td-da3ef9]
-  - [ ] 3.1 Call validator after stage completion
-  - [ ] 3.2 Block progression on validation failure
-  - [ ] 3.3 Trigger intervention engine on failure
+- [x] Task 3: Integrate validation with workflow stage execution (AC: #4) [td:td-da3ef9]
+  - [x] 3.1 Call validator after stage completion
+  - [x] 3.2 Block progression on validation failure
+  - [x] 3.3 Trigger intervention engine on failure
 - [x] Task 4: Add validation node to LangGraph workflow graph (AC: #1-4) [td:td-35c831]
   - [x] 4.1 Create validate.py node
   - [x] 4.2 Implement validation node that calls Elixir validator API
@@ -117,6 +117,22 @@ N/A - All tests passed on first run after implementation
 
 ### Completion Notes List
 
+**Task 3: Integrate validation with workflow stage execution**
+
+- Verified existing integration between validation and intervention:
+  - `StageExecutor.run_validations/3` called after stage completion
+  - Validation failures set result status to `:failure` (blocks progression)
+  - Validation results stored in session via `Session.store_validation_result/3`
+  - `WorkflowInstance.handle_stage_result/2` triggers intervention on failure
+  - `Intervention.Dumb.check_validation_failure/1` detects failed validations
+  - Returns `:retry` action with validation context for automatic retry
+- Added comprehensive integration tests for validation → intervention flow:
+  - Test validation failure blocks progression
+  - Test passing validation allows progression
+  - Test intervention detects validation failure from session context
+  - Test validation results stored and retrieved from session
+  - Test full flow: validation failure triggers intervention retry
+
 **Task 4: Add validation node to LangGraph workflow graph**
 
 - Created `langgraph/src/babysitter_agent/nodes/` directory structure
@@ -149,6 +165,7 @@ N/A - All tests passed on first run after implementation
 | `langgraph/tests/test_nodes/__init__.py` | NEW | Test package init |
 | `langgraph/tests/test_nodes/test_validate.py` | NEW | Validation node tests (11 tests) |
 | `langgraph/tests/test_graph.py` | MODIFIED | Updated for new graph structure |
+| `test/workflow_instance_test.exs` | MODIFIED | Added validation→intervention integration tests (5 tests) |
 
 ---
 
@@ -160,3 +177,4 @@ N/A - All tests passed on first run after implementation
 | 2026-02-28T12:30:00 | task-in_review | td-f31e80: Task 1 already in review |
 | 2026-02-28T12:30:00 | task-in_review | td-51d1fb: Task 2 already in review |
 | 2026-02-28T13:15:00 | task-complete | td-35c831: Task 4 - Add validation node to LangGraph workflow graph |
+| 2026-02-28T12:56:00 | task-complete | td-da3ef9: Task 3 - Integrate validation with workflow stage execution |

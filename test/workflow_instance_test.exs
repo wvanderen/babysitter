@@ -320,4 +320,125 @@ defmodule Babysitter.WorkflowInstanceTest do
       assert result.reason =~ "No progress"
     end
   end
+
+  describe "validation to intervention integration" do
+    setup do
+      workflow_yaml = """
+      id: validation-intervention-workflow
+      name: Validation Intervention Test Workflow
+      stages:
+        - id: validated_stage
+          type: action
+          command: echo "output"
+      """
+
+      {:ok, workflow} = Parser.parse_string(workflow_yaml)
+      WorkflowStore.put(workflow)
+      :ok
+    end
+
+    test "validation failure blocks progression to on_success" do
+      result = %Babysitter.StageExecutor.Result{
+        stage_id: :validated_stage,
+        session_id: "test",
+        status: :failure,
+        output: "Build output",
+        exit_code: 0,
+        validation_errors: ["output does not contain 'success'"],
+        started_at: DateTime.utc_now(),
+        finished_at: DateTime.utc_now()
+      }
+
+      assert result.status == :failure
+      assert result.validation_errors != nil
+    end
+
+    test "passing validation allows progression" do
+      result = %Babysitter.StageExecutor.Result{
+        stage_id: :validated_stage,
+        session_id: "test",
+        status: :success,
+        output: "Build succeeded",
+        exit_code: 0,
+        validation_errors: nil,
+        started_at: DateTime.utc_now(),
+        finished_at: DateTime.utc_now()
+      }
+
+      assert result.status == :success
+      assert result.validation_errors == nil
+    end
+
+    test "intervention detects validation failure from session context" do
+      session_context = %{
+        current_stage: :test_stage,
+        status: :running,
+        retries: %{test_stage: 0},
+        max_retries: 3,
+        validations: [
+          %{status: :fail, type: :tests, output: "2 tests failed", exit_code: 1}
+        ]
+      }
+
+      result = Intervention.check(session_context, :dumb)
+
+      assert result.action == :retry
+      assert result.reason =~ "Validation"
+      assert result.context.validation_type == :tests
+    end
+
+    test "validation results are stored in session and retrieved for intervention" do
+      session_id = create_session()
+      now = DateTime.utc_now()
+
+      validation_result = %Babysitter.Validation.Result{
+        type: :compile,
+        status: :fail,
+        output: "Compilation error",
+        exit_code: 1,
+        error: "undefined function foo/0",
+        started_at: now,
+        finished_at: now
+      }
+
+      Babysitter.Session.store_validation_result(
+        session_id,
+        :validated_stage,
+        validation_result
+      )
+
+      {:ok, results} = Babysitter.Session.get_validation_results(session_id, :validated_stage)
+
+      assert length(results) == 1
+      [stored | _] = results
+      assert stored.status == :fail
+      assert stored.type == :compile
+      assert stored.error == "undefined function foo/0"
+    end
+
+    test "full flow: validation failure triggers intervention retry" do
+      session_context = %{
+        current_stage: :validated_stage,
+        status: :running,
+        retries: %{validated_stage: 0},
+        max_retries: 3,
+        output_buffer: "Build output",
+        validations: [
+          %{
+            status: :fail,
+            type: :compile,
+            output: "error: undefined function",
+            exit_code: 1,
+            error: "Compilation failed"
+          }
+        ]
+      }
+
+      result = Intervention.check(session_context, :dumb)
+
+      assert result.action == :retry
+      assert result.context.validation_type == :compile
+      assert result.context.error_output =~ "undefined function"
+    end
+  end
 end
