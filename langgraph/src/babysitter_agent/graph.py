@@ -4,6 +4,10 @@ from langgraph.graph import StateGraph, END
 
 from babysitter_agent.state import AgentState
 from babysitter_agent.checkpointer import get_checkpointer
+from babysitter_agent.nodes.validate import (
+    validate_node,
+    determine_validation_action,
+)
 
 
 def analyze_sessions(state: AgentState) -> dict:
@@ -13,6 +17,9 @@ def analyze_sessions(state: AgentState) -> dict:
 
 def determine_action(state: AgentState) -> str:
     """Placeholder conditional edge: Determine if action is needed."""
+    pending = state.get("pending_validations", [])
+    if pending:
+        return "validate"
     return "no_action"
 
 
@@ -27,10 +34,17 @@ def record_intervention(state: AgentState) -> dict:
 
 
 def build_graph() -> StateGraph:
-    """Build the Babysitter Agent workflow graph."""
+    """Build the Babysitter Agent workflow graph.
+
+    The graph supports validation workflows:
+    - analyze -> determine_action (routes to validate or END)
+    - validate -> determine_validation_action (routes to intervene or END)
+    - intervene -> record -> END
+    """
     graph = StateGraph(AgentState)
 
     graph.add_node("analyze", analyze_sessions)
+    graph.add_node("validate", validate_node)
     graph.add_node("intervene", create_intervention)
     graph.add_node("record", record_intervention)
 
@@ -40,8 +54,19 @@ def build_graph() -> StateGraph:
         "analyze",
         determine_action,
         {
+            "validate": "validate",
             "action_needed": "intervene",
             "no_action": END,
+        },
+    )
+
+    graph.add_conditional_edges(
+        "validate",
+        determine_validation_action,
+        {
+            "validate": "validate",
+            "intervene": "intervene",
+            "no_validation": END,
         },
     )
 

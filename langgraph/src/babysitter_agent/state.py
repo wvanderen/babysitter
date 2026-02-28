@@ -20,3 +20,6 @@ class AgentState(TypedDict):
     intervention_history: Annotated[list[dict[str, Any]], add]
     current_analysis: str | None
     pending_action: dict[str, Any] | None
+    pending_validations: list[dict[str, Any]]
+    validation_results: Annotated[list[dict[str, Any]], add]
+    elixir_api_base_url: str
