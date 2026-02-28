@@ -82,10 +82,10 @@ defmodule Babysitter.PRTrigger do
     end
   end
 
-  defp do_execute(_trigger, _issue, _opts, true) do
-    title = build_title(_issue, _opts)
-    body = build_body(_issue, _opts)
-    {:ok, %{title: title, body: body, dry_run: true}}
+  defp do_execute(trigger, issue, opts, true) do
+    title = build_title(issue, opts)
+    body = build_body(issue, opts)
+    {:ok, %{title: title, body: body, dry_run: true, trigger: trigger}}
   end
 
   defp do_execute(_trigger, issue, opts, false) do
@@ -112,15 +112,30 @@ defmodule Babysitter.PRTrigger do
 
     case result do
       {:ok, pr_data} = success ->
-        if labels != [] do
-          PR.add_labels(pr: pr_data[:number], labels: labels)
-        end
+        label_result =
+          if labels != [], do: PR.add_labels(pr: pr_data[:number], labels: labels), else: :ok
 
-        if reviewers != [] do
-          PR.add_reviewers(pr: pr_data[:number], reviewers: reviewers)
-        end
+        reviewer_result =
+          if reviewers != [],
+            do: PR.add_reviewers(pr: pr_data[:number], reviewers: reviewers),
+            else: :ok
 
-        success
+        final_result =
+          case {label_result, reviewer_result} do
+            {:ok, :ok} ->
+              success
+
+            {{:error, _}, :ok} ->
+              {:error, "PR created but failed to add labels"}
+
+            {:ok, {:error, _}} ->
+              {:error, "PR created but failed to add reviewers"}
+
+            {{:error, _}, {:error, _}} ->
+              {:error, "PR created but failed to add labels and reviewers"}
+          end
+
+        final_result
 
       error ->
         error

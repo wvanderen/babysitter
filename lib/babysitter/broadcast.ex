@@ -136,6 +136,19 @@ defmodule Babysitter.Broadcast do
   end
 
   @doc """
+  Broadcast workflow completed event.
+  """
+  @spec workflow_completed(session_id(), map()) :: :ok
+  def workflow_completed(session_id, metadata \\ %{}) do
+    broadcast(session_id, "workflow:completed", %{
+      session_id: session_id,
+      timestamp: DateTime.utc_now() |> DateTime.to_iso8601(),
+      variables: Map.get(metadata, :variables, %{}),
+      execution_history: Map.get(metadata, :execution_history, [])
+    })
+  end
+
+  @doc """
   Subscribe to all events for a session.
   """
   @spec subscribe(session_id()) :: :ok | {:error, term()}

@@ -75,12 +75,16 @@ From architecture.md:
 elixir/
 ├── lib/
 │   └── babysitter/
-│       ├── pr.ex              # MODIFY: PR creation via gh CLI
+│       ├── pr.ex              # EXISTING: Already implemented in prior story
 │       ├── pr_trigger.ex      # NEW: PR trigger integration
 │       └── config.ex          # MODIFY: Added pr_strategy config
 └── test/
-    ├── pr_test.exs            # MODIFY: Existing tests
+    ├── pr_test.exs            # EXISTING: Already implemented in prior story
     └── pr_trigger_test.exs   # NEW: PR trigger tests
+
+# Also modified:
+lib/babysitter/broadcast.ex          # ADDED: workflow_completed event
+lib/babysitter/workflow_instance.ex  # MODIFY: Integrate PRTrigger on workflow completion
 ```
 
 ### Implementation Approach

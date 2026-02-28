@@ -20,7 +20,7 @@ defmodule Babysitter.WorkflowInstance do
 
   use GenServer
 
-  alias Babysitter.{Broadcast, StageExecutor, TransitionEngine, WorkflowStore}
+  alias Babysitter.{Broadcast, Config, PRTrigger, StageExecutor, TransitionEngine, WorkflowStore}
 
   @type status :: :pending | :running | :paused | :completed | :failed | :escalated | :stopped
   @type instance_id :: String.t()
@@ -462,8 +462,10 @@ defmodule Babysitter.WorkflowInstance do
   defp handle_stage_result(%StageExecutor.Result{status: :success} = result, state) do
     case TransitionEngine.next_stage(get_current_stage(state), result) do
       {:ok, :complete} ->
-        broadcast_progress(state, :completed)
-        {:noreply, %{state | status: :completed, completed_at: DateTime.utc_now()}}
+        new_state = %{state | status: :completed, completed_at: DateTime.utc_now()}
+        broadcast_progress(new_state, :completed)
+        trigger_pr_on_completion(new_state)
+        {:noreply, new_state}
 
       {:ok, next_stage_id} when is_atom(next_stage_id) ->
         Broadcast.stage_transition(
@@ -479,8 +481,10 @@ defmodule Babysitter.WorkflowInstance do
         {:noreply, new_state}
 
       {:error, :no_transition_defined} ->
-        broadcast_progress(state, :completed)
-        {:noreply, %{state | status: :completed, completed_at: DateTime.utc_now()}}
+        new_state = %{state | status: :completed, completed_at: DateTime.utc_now()}
+        broadcast_progress(new_state, :completed)
+        trigger_pr_on_completion(new_state)
+        {:noreply, new_state}
     end
   end
 
@@ -570,6 +574,31 @@ defmodule Babysitter.WorkflowInstance do
       total_stages: total_stages,
       status: status
     })
+  end
+
+  defp trigger_pr_on_completion(state) do
+    if state.session_id do
+      issue = Map.get(state.variables, :issue, %{})
+      stage_summary = build_stage_summary(state.execution_history)
+
+      Broadcast.workflow_completed(state.session_id, %{
+        variables: state.variables,
+        execution_history: state.execution_history
+      })
+
+      if Config.git_pr_trigger() == :workflow_complete and issue != %{} do
+        PRTrigger.on_workflow_complete(issue, stage: %{summary: stage_summary})
+      end
+    end
+  rescue
+    _ -> :ok
+  end
+
+  defp build_stage_summary(execution_history) do
+    execution_history
+    |> Enum.filter(fn entry -> entry.status == :success end)
+    |> Enum.map(fn entry -> entry.stage_id |> Atom.to_string() end)
+    |> Enum.join(", ")
   end
 
   defp validate_transition(from_status, to_status) do
