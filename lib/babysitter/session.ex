@@ -482,6 +482,7 @@ defmodule Babysitter.Session do
   def handle_call(:pause, _from, state) do
     with :ok <- validate_transition(state.status, :paused) do
       Babysitter.Tmux.send_keys(state.tmux_name, "\x1A")
+      Babysitter.Broadcast.session_status(state.id, state.status, :paused)
       {:reply, {:ok, :paused}, %{state | status: :paused}}
     else
       {:error, _} = error -> {:reply, error, state}
@@ -491,6 +492,7 @@ defmodule Babysitter.Session do
   def handle_call(:resume, _from, state) do
     with :ok <- validate_transition(state.status, :running) do
       Babysitter.Tmux.send_keys(state.tmux_name, "\x1A")
+      Babysitter.Broadcast.session_status(state.id, state.status, :running)
       {:reply, {:ok, :running}, %{state | status: :running}}
     else
       {:error, _} = error -> {:reply, error, state}
@@ -680,6 +682,7 @@ defmodule Babysitter.Session do
   def handle_cast({:append_output, output}, state) do
     new_buffer = append_to_buffer(state.output_buffer, output, state.max_buffer_size)
     new_size = byte_size(new_buffer)
+    Babysitter.Broadcast.session_output(state.id, output)
     {:noreply, %{state | output_buffer: new_buffer, buffer_size: new_size}}
   end
 
