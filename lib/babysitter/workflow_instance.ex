@@ -20,7 +20,17 @@ defmodule Babysitter.WorkflowInstance do
 
   use GenServer
 
-  alias Babysitter.{Broadcast, Config, PRTrigger, StageExecutor, TransitionEngine, WorkflowStore}
+  alias Babysitter.{
+    Broadcast,
+    Config,
+    Intervention,
+    PRTrigger,
+    RetryHandler,
+    Session,
+    StageExecutor,
+    TransitionEngine,
+    WorkflowStore
+  }
 
   @type status :: :pending | :running | :paused | :completed | :failed | :escalated | :stopped
   @type instance_id :: String.t()
@@ -508,20 +518,7 @@ defmodule Babysitter.WorkflowInstance do
         {:noreply, new_state}
 
       {:error, :no_transition_defined} ->
-        if state.retry_count < state.max_retries do
-          new_state = %{state | retry_count: state.retry_count + 1}
-          send(self(), :execute_current_stage)
-          {:noreply, new_state}
-        else
-          broadcast_progress(state, :failed)
-
-          {:noreply,
-           %{
-             state
-             | status: :failed,
-               failure_reason: result.error || "Stage failed after #{state.max_retries} retries"
-           }}
-        end
+        handle_intervention(result, state)
     end
   end
 
@@ -545,8 +542,7 @@ defmodule Babysitter.WorkflowInstance do
         {:noreply, new_state}
 
       {:error, :no_transition_defined} ->
-        broadcast_progress(state, :failed)
-        {:noreply, %{state | status: :failed, failure_reason: result.error || "Stage timed out"}}
+        handle_intervention(result, state)
     end
   end
 
@@ -599,6 +595,182 @@ defmodule Babysitter.WorkflowInstance do
     |> Enum.filter(fn entry -> entry.status == :success end)
     |> Enum.map(fn entry -> entry.stage_id |> Atom.to_string() end)
     |> Enum.join(", ")
+  end
+
+  defp handle_intervention(result, state) do
+    session_context = build_session_context(state, result)
+    intervention_result = Intervention.check(session_context, :dumb)
+
+    case intervention_result.action do
+      :ok ->
+        broadcast_progress(state, :failed)
+        {:noreply, %{state | status: :failed, failure_reason: result.error || "Stage failed"}}
+
+      :retry ->
+        handle_retry_intervention(state, result, intervention_result)
+
+      :restart ->
+        handle_restart_intervention(state, result, intervention_result)
+
+      :escalate ->
+        handle_escalate_intervention(state, result, intervention_result)
+
+      :skip ->
+        handle_skip_intervention(state, result)
+    end
+  end
+
+  defp build_session_context(state, result) do
+    base_context = %{
+      current_stage: state.current_stage,
+      status: if(result.status == :timeout, do: :timeout, else: :running),
+      retries: %{state.current_stage => state.retry_count},
+      max_retries: state.max_retries,
+      output_buffer: result.output || ""
+    }
+
+    case get_session_state(state.session_id) do
+      {:ok, session} ->
+        Map.merge(base_context, %{
+          last_activity: session[:started_at],
+          validations: build_validations_from_session(session)
+        })
+
+      {:error, _} ->
+        base_context
+    end
+  end
+
+  defp get_session_state(nil), do: {:error, :no_session}
+
+  defp get_session_state(session_id) do
+    case Session.get_state(session_id) do
+      {:ok, session} -> {:ok, Map.from_struct(session)}
+      error -> error
+    end
+  end
+
+  defp build_validations_from_session(session) do
+    case Map.get(session, :validation_results, %{}) do
+      results when is_map(results) ->
+        results
+        |> Map.values()
+        |> List.flatten()
+        |> Enum.map(fn v ->
+          %{
+            status: if(v.status == :pass, do: :pass, else: :fail),
+            type: Map.get(v, :type, :unknown),
+            output: Map.get(v, :output, ""),
+            exit_code: Map.get(v, :exit_code, 1),
+            error: Map.get(v, :error)
+          }
+        end)
+
+      _ ->
+        []
+    end
+  end
+
+  defp handle_retry_intervention(state, result, intervention_result) do
+    if state.retry_count < state.max_retries do
+      new_retry_count = state.retry_count + 1
+      stage = get_current_stage(state)
+
+      new_variables =
+        if stage && stage.prompt do
+          retry_prompt =
+            RetryHandler.build_retry_prompt_from_intervention(
+              stage,
+              result,
+              intervention_result,
+              retry_count: new_retry_count
+            )
+
+          Map.put(state.variables, :retry_prompt, retry_prompt)
+        else
+          state.variables
+        end
+
+      new_state = %{state | retry_count: new_retry_count, variables: new_variables}
+      broadcast_progress(new_state, :running)
+      send(self(), :execute_current_stage)
+      {:noreply, new_state}
+    else
+      handle_escalate_intervention(state, result, intervention_result)
+    end
+  end
+
+  defp handle_restart_intervention(state, result, intervention_result) do
+    new_retry_count = state.retry_count + 1
+
+    if new_retry_count <= state.max_retries do
+      stage = get_current_stage(state)
+
+      new_variables =
+        if stage && stage.prompt do
+          retry_prompt =
+            RetryHandler.build_retry_prompt_from_intervention(
+              stage,
+              result,
+              intervention_result,
+              retry_count: new_retry_count
+            )
+
+          Map.put(state.variables, :retry_prompt, retry_prompt)
+        else
+          state.variables
+        end
+
+      new_state = %{state | retry_count: new_retry_count, variables: new_variables}
+
+      if state.session_id do
+        Session.intervene(state.session_id, :restart, reason: intervention_result.reason)
+      end
+
+      broadcast_progress(new_state, :running)
+      send(self(), :execute_current_stage)
+      {:noreply, new_state}
+    else
+      handle_escalate_intervention(state, result, intervention_result)
+    end
+  end
+
+  defp handle_escalate_intervention(state, result, intervention_result) do
+    reason = intervention_result.reason || result.error || "Stage failed - escalation required"
+
+    if state.session_id do
+      Session.intervene(state.session_id, :escalate, reason: reason)
+    end
+
+    broadcast_progress(state, :escalated)
+
+    {:noreply,
+     %{
+       state
+       | status: :escalated,
+         escalation_reason: reason,
+         failure_reason: reason
+     }}
+  end
+
+  defp handle_skip_intervention(state, _result) do
+    with {:ok, workflow} <- WorkflowStore.get(state.workflow_id),
+         stage_order <- workflow.stage_order || [],
+         current_idx <- Enum.find_index(stage_order, &(&1 == state.current_stage)),
+         next_idx when is_integer(next_idx) <- current_idx && current_idx + 1,
+         next_stage when is_atom(next_stage) <- Enum.at(stage_order, next_idx) do
+      Broadcast.stage_transition(state.session_id, state.current_stage, next_stage, "skip")
+
+      new_state = %{state | current_stage: next_stage, retry_count: 0}
+      broadcast_progress(new_state, :running)
+      send(self(), :execute_current_stage)
+      {:noreply, new_state}
+    else
+      _ ->
+        new_state = %{state | status: :completed, completed_at: DateTime.utc_now()}
+        broadcast_progress(new_state, :completed)
+        {:noreply, new_state}
+    end
   end
 
   defp validate_transition(from_status, to_status) do

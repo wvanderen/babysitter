@@ -1,7 +1,13 @@
 defmodule Babysitter.WorkflowInstanceTest do
   use ExUnit.Case, async: false
 
-  alias Babysitter.{WorkflowInstance, WorkflowStore, Workflow.Parser, SessionManager}
+  alias Babysitter.{
+    WorkflowInstance,
+    WorkflowStore,
+    Workflow.Parser,
+    SessionManager,
+    Intervention
+  }
 
   setup_all do
     workflow_yaml = """
@@ -235,6 +241,83 @@ defmodule Babysitter.WorkflowInstanceTest do
       {id, _pid} = start_instance()
       {:ok, state} = WorkflowInstance.get_state(id)
       assert state.status == :pending
+    end
+  end
+
+  describe "intervention integration" do
+    setup do
+      workflow_yaml = """
+      id: intervention-test-workflow
+      name: Intervention Test Workflow
+      stages:
+        - id: fail_stage
+          type: action
+          command: exit 1
+      """
+
+      {:ok, workflow} = Parser.parse_string(workflow_yaml)
+      WorkflowStore.put(workflow)
+      :ok
+    end
+
+    test "intervention triggers retry on validation failure" do
+      session_context = %{
+        current_stage: :fail_stage,
+        status: :running,
+        retries: %{fail_stage: 0},
+        max_retries: 3,
+        validations: [%{status: :fail, type: :test, output: "err", exit_code: 1}]
+      }
+
+      result = Intervention.check(session_context, :dumb)
+
+      assert result.action == :retry
+      assert result.reason =~ "Validation"
+    end
+
+    test "intervention escalates when max retries exceeded" do
+      session_context = %{
+        current_stage: :fail_stage,
+        status: :running,
+        retries: %{fail_stage: 3},
+        max_retries: 3
+      }
+
+      result = Intervention.check(session_context, :dumb)
+
+      assert result.action == :escalate
+      assert result.reason =~ "Max retries"
+    end
+
+    test "intervention restarts on timeout" do
+      session_context = %{
+        current_stage: :fail_stage,
+        status: :timeout,
+        retries: %{fail_stage: 0},
+        max_retries: 3
+      }
+
+      result = Intervention.check(session_context, :dumb)
+
+      assert result.action == :restart
+      assert result.reason =~ "timed out"
+    end
+
+    test "intervention escalates when stuck too long" do
+      stuck_time = DateTime.utc_now() |> DateTime.add(-15, :minute)
+
+      session_context = %{
+        current_stage: :fail_stage,
+        status: :running,
+        retries: %{fail_stage: 0},
+        last_activity: stuck_time,
+        stuck_threshold_minutes: 10
+      }
+
+      result = Intervention.check(session_context, :dumb)
+
+      assert result.action == :escalate
+      assert result.reason =~ "No progress"
     end
   end
 end
